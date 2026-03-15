@@ -1,4 +1,3 @@
-// URL base do backend — troque se mudar de servidor
 const BASE = import.meta.env.VITE_API_URL || 'https://francagestao.onrender.com';
 
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -17,38 +16,43 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
 export const api = {
   login: (password: string) => req<{ success: boolean }>('POST', '/login', { password }),
 
-  // Tasks
   getTasks: () => req<any[]>('GET', '/tasks'),
   addTask: (data: object) => req<any>('POST', '/tasks', data),
   updateTask: (id: string, data: object) => req<any>('PATCH', `/tasks/${id}`, data),
   deleteTask: (id: string) => req<any>('DELETE', `/tasks/${id}`),
 
-  // Missions
   getMissions: () => req<any[]>('GET', '/missions'),
   addMission: (data: object) => req<any>('POST', '/missions', data),
   updateMission: (id: string, data: object) => req<any>('PATCH', `/missions/${id}`, data),
   deleteMission: (id: string) => req<any>('DELETE', `/missions/${id}`),
 
-  // Notes
   getNotes: () => req<any[]>('GET', '/notes'),
   addNote: (data: object) => req<any>('POST', '/notes', data),
   updateNote: (id: string, data: object) => req<any>('PATCH', `/notes/${id}`, data),
   deleteNote: (id: string) => req<any>('DELETE', `/notes/${id}`),
 
-  // Purchases
   getPurchases: () => req<any[]>('GET', '/purchases'),
   addPurchase: (data: object) => req<any>('POST', '/purchases', data),
   updatePurchase: (id: string, data: object) => req<any>('PATCH', `/purchases/${id}`, data),
   deletePurchase: (id: string) => req<any>('DELETE', `/purchases/${id}`),
 
-  // Sales
   getSales: () => req<any[]>('GET', '/sales'),
   addSale: (data: object) => req<any>('POST', '/sales', data),
   deleteSale: (id: string) => req<any>('DELETE', `/sales/${id}`),
 
-  // Deliveries
   getDeliveries: () => req<any[]>('GET', '/deliveries'),
   addDelivery: (data: object) => req<any>('POST', '/deliveries', data),
   updateDelivery: (id: string, data: object) => req<any>('PATCH', `/deliveries/${id}`, data),
   deleteDelivery: (id: string) => req<any>('DELETE', `/deliveries/${id}`),
+
+  // Membros
+  getMembers: () => req<any[]>('GET', '/members'),
+  addMember: (data: object) => req<any>('POST', '/members', data),
+  updateMember: (id: string, data: object) => req<any>('PATCH', `/members/${id}`, data),
+  deleteMember: (id: string) => req<any>('DELETE', `/members/${id}`),
+
+  // Finanças
+  getTransactions: () => req<any[]>('GET', '/transactions'),
+  addTransaction: (data: object) => req<any>('POST', '/transactions', data),
+  deleteTransaction: (id: string) => req<any>('DELETE', `/transactions/${id}`),
 };

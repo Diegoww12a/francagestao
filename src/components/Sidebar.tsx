@@ -1,4 +1,4 @@
-import { CheckSquare, Target, StickyNote, ShoppingCart, TrendingUp, Package, History } from 'lucide-react';
+import { CheckSquare, Target, StickyNote, ShoppingCart, TrendingUp, Package, History, Users, Wallet } from 'lucide-react';
 
 interface SidebarProps {
   activeSection: string;
@@ -12,7 +12,9 @@ const menuItems = [
   { id: 'purchases', label: 'Compras', icon: ShoppingCart, color: 'from-orange-600 to-orange-700' },
   { id: 'sales', label: 'Vendas', icon: TrendingUp, color: 'from-green-600 to-green-700' },
   { id: 'deliveries', label: 'Entregas', icon: Package, color: 'from-cyan-600 to-cyan-700' },
-  { id: 'history', label: 'Histórico', icon: History, color: 'from-pink-600 to-pink-700' },
+  { id: 'members', label: 'Membros', icon: Users, color: 'from-pink-600 to-pink-700' },
+  { id: 'finance', label: 'Finanças', icon: Wallet, color: 'from-emerald-600 to-emerald-700' },
+  { id: 'history', label: 'Histórico', icon: History, color: 'from-rose-600 to-rose-700' },
   { id: 'advanced-history', label: 'Relatório', icon: History, color: 'from-indigo-600 to-indigo-700' },
 ];
 
@@ -27,29 +29,16 @@ export default function Sidebar({ activeSection, onSectionChange }: SidebarProps
         <p className="text-xs text-gray-400 ml-4">Painel de Controle</p>
       </div>
 
-      <nav className="flex-1 p-4 space-y-1">
+      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeSection === item.id;
-
           return (
-            <button
-              key={item.id}
-              onClick={() => onSectionChange(item.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 relative group ${
-                isActive
-                  ? `bg-gradient-to-r ${item.color} text-white shadow-lg shadow-current/30`
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
-              }`}
-            >
-              {isActive && (
-                <div className="absolute inset-0 bg-gradient-to-r from-current/20 to-transparent rounded-lg blur"></div>
-              )}
+            <button key={item.id} onClick={() => onSectionChange(item.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 relative group ${isActive ? `bg-gradient-to-r ${item.color} text-white shadow-lg shadow-current/30` : 'text-gray-400 hover:text-white hover:bg-gray-800/50'}`}>
+              {isActive && <div className="absolute inset-0 bg-gradient-to-r from-current/20 to-transparent rounded-lg blur"></div>}
               <Icon size={20} className="relative z-10" />
               <span className="font-medium relative z-10">{item.label}</span>
-              {isActive && (
-                <div className="ml-auto w-1.5 h-1.5 bg-white rounded-full relative z-10"></div>
-              )}
+              {isActive && <div className="ml-auto w-1.5 h-1.5 bg-white rounded-full relative z-10"></div>}
             </button>
           );
         })}
