@@ -1,11 +1,16 @@
 import express from 'express';
 import cors from 'cors';
 import bcrypt from 'bcrypt';
-import Database from 'better-sqlite3';
+import pg from 'pg';
 import { randomUUID } from 'crypto';
 
 const app = express();
-const db = new Database('data.db');
+const { Pool } = pg;
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL || 'postgresql://francagestao_db_user:LSGPLhjLaqNCPmMFo21GP28gQcmpYdhO@dpg-d6s7drua2pns73dhioo0-a/francagestao_db',
+  ssl: { rejectUnauthorized: false }
+});
 
 const allowedOrigins = [
   'https://diegoww12a.github.io',
@@ -23,112 +28,118 @@ app.use(cors({
 
 app.use(express.json());
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS tasks (
-    id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT DEFAULT '',
-    status TEXT DEFAULT 'pending', created_at TEXT DEFAULT (datetime('now')), completed_at TEXT
-  );
-  CREATE TABLE IF NOT EXISTS missions (
-    id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT DEFAULT '',
-    scheduled_date TEXT, status TEXT DEFAULT 'pending',
-    created_at TEXT DEFAULT (datetime('now')), completed_at TEXT
-  );
-  CREATE TABLE IF NOT EXISTS notes (
-    id TEXT PRIMARY KEY, content TEXT NOT NULL,
-    created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now'))
-  );
-  CREATE TABLE IF NOT EXISTS purchases (
-    id TEXT PRIMARY KEY, item TEXT NOT NULL, quantity INTEGER NOT NULL,
-    price INTEGER NOT NULL, status TEXT DEFAULT 'pending', created_at TEXT DEFAULT (datetime('now'))
-  );
-  CREATE TABLE IF NOT EXISTS sales (
-    id TEXT PRIMARY KEY, item TEXT NOT NULL, quantity INTEGER NOT NULL,
-    price INTEGER NOT NULL, buyer TEXT DEFAULT '', created_at TEXT DEFAULT (datetime('now'))
-  );
-  CREATE TABLE IF NOT EXISTS deliveries (
-    id TEXT PRIMARY KEY, description TEXT NOT NULL, recipient TEXT NOT NULL,
-    status TEXT DEFAULT 'pending', created_at TEXT DEFAULT (datetime('now')), completed_at TEXT
-  );
-  CREATE TABLE IF NOT EXISTS members (
-    id TEXT PRIMARY KEY, name TEXT NOT NULL, role TEXT DEFAULT 'Recruta',
-    kick_channel TEXT DEFAULT '', avatar_url TEXT DEFAULT '',
-    joined_at TEXT DEFAULT '', status TEXT DEFAULT 'active',
-    created_at TEXT DEFAULT (datetime('now'))
-  );
-  CREATE TABLE IF NOT EXISTS transactions (
-    id TEXT PRIMARY KEY, type TEXT NOT NULL, description TEXT NOT NULL,
-    amount INTEGER NOT NULL, created_at TEXT DEFAULT (datetime('now'))
-  );
-  CREATE TABLE IF NOT EXISTS stock (
-    id TEXT PRIMARY KEY, name TEXT NOT NULL, quantity INTEGER NOT NULL,
-    category TEXT DEFAULT 'Item', created_at TEXT DEFAULT (datetime('now'))
-  );
-`);
+// Criar tabelas
+async function initDB() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS tasks (
+      id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT DEFAULT '',
+      status TEXT DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT NOW(), completed_at TIMESTAMPTZ
+    );
+    CREATE TABLE IF NOT EXISTS missions (
+      id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT DEFAULT '',
+      scheduled_date TEXT, status TEXT DEFAULT 'pending',
+      created_at TIMESTAMPTZ DEFAULT NOW(), completed_at TIMESTAMPTZ
+    );
+    CREATE TABLE IF NOT EXISTS notes (
+      id TEXT PRIMARY KEY, content TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS purchases (
+      id TEXT PRIMARY KEY, item TEXT NOT NULL, quantity INTEGER NOT NULL,
+      price INTEGER NOT NULL, status TEXT DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS sales (
+      id TEXT PRIMARY KEY, item TEXT NOT NULL, quantity INTEGER NOT NULL,
+      price INTEGER NOT NULL, buyer TEXT DEFAULT '', created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS deliveries (
+      id TEXT PRIMARY KEY, description TEXT NOT NULL, recipient TEXT NOT NULL,
+      status TEXT DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT NOW(), completed_at TIMESTAMPTZ
+    );
+    CREATE TABLE IF NOT EXISTS members (
+      id TEXT PRIMARY KEY, name TEXT NOT NULL, role TEXT DEFAULT 'Recruta',
+      kick_channel TEXT DEFAULT '', avatar_url TEXT DEFAULT '',
+      joined_at TEXT DEFAULT '', status TEXT DEFAULT 'active',
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS transactions (
+      id TEXT PRIMARY KEY, type TEXT NOT NULL, description TEXT NOT NULL,
+      amount INTEGER NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS stock (
+      id TEXT PRIMARY KEY, name TEXT NOT NULL, quantity INTEGER NOT NULL,
+      category TEXT DEFAULT 'Item', created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+  console.log('Banco de dados inicializado!');
+}
+
+initDB().catch(console.error);
 
 const PASSWORD_HASH = process.env.PASSWORD_HASH || '$2b$10$bn7SVyBy3fULDf7jK4wc.uTRO4XDDtXaJ6qDzqO5yhrG6PNueiJvK';
+const uuid = () => randomUUID();
+const now = () => new Date().toISOString();
 
+// AUTH
 app.post('/login', async (req, res) => {
   const { password } = req.body;
   if (!password) return res.status(400).json({ error: 'Senha obrigatória' });
-  const ok = await bcrypt.compare(password, PASSWORD_HASH);
+  const ok = await bcrypt.compare(password.trim(), PASSWORD_HASH);
   if (!ok) return res.status(401).json({ error: 'Senha incorreta' });
   res.json({ success: true });
 });
 
-const uuid = () => randomUUID();
-const now = () => new Date().toISOString();
-
 // TASKS
-app.get('/tasks', (_, res) => res.json(db.prepare('SELECT * FROM tasks ORDER BY created_at DESC').all()));
-app.post('/tasks', (req, res) => { const { title, description = '', status = 'pending' } = req.body; if (!title) return res.status(400).json({ error: 'title obrigatório' }); const id = uuid(); db.prepare('INSERT INTO tasks (id,title,description,status) VALUES (?,?,?,?)').run(id, title, description, status); res.json(db.prepare('SELECT * FROM tasks WHERE id=?').get(id)); });
-app.patch('/tasks/:id', (req, res) => { const { status } = req.body; db.prepare('UPDATE tasks SET status=?, completed_at=? WHERE id=?').run(status, status === 'completed' ? now() : null, req.params.id); res.json(db.prepare('SELECT * FROM tasks WHERE id=?').get(req.params.id)); });
-app.delete('/tasks/:id', (req, res) => { db.prepare('DELETE FROM tasks WHERE id=?').run(req.params.id); res.json({ success: true }); });
+app.get('/tasks', async (_, res) => { const r = await pool.query('SELECT * FROM tasks ORDER BY created_at DESC'); res.json(r.rows); });
+app.post('/tasks', async (req, res) => { const { title, description = '', status = 'pending' } = req.body; if (!title) return res.status(400).json({ error: 'title obrigatório' }); const id = uuid(); await pool.query('INSERT INTO tasks (id,title,description,status) VALUES ($1,$2,$3,$4)', [id, title, description, status]); const r = await pool.query('SELECT * FROM tasks WHERE id=$1', [id]); res.json(r.rows[0]); });
+app.patch('/tasks/:id', async (req, res) => { const { status } = req.body; const completed_at = status === 'completed' ? now() : null; await pool.query('UPDATE tasks SET status=$1, completed_at=$2 WHERE id=$3', [status, completed_at, req.params.id]); const r = await pool.query('SELECT * FROM tasks WHERE id=$1', [req.params.id]); res.json(r.rows[0]); });
+app.delete('/tasks/:id', async (req, res) => { await pool.query('DELETE FROM tasks WHERE id=$1', [req.params.id]); res.json({ success: true }); });
 
 // MISSIONS
-app.get('/missions', (_, res) => res.json(db.prepare('SELECT * FROM missions ORDER BY scheduled_date ASC').all()));
-app.post('/missions', (req, res) => { const { title, description = '', scheduled_date, status = 'pending' } = req.body; if (!title) return res.status(400).json({ error: 'title obrigatório' }); const id = uuid(); db.prepare('INSERT INTO missions (id,title,description,scheduled_date,status) VALUES (?,?,?,?,?)').run(id, title, description, scheduled_date, status); res.json(db.prepare('SELECT * FROM missions WHERE id=?').get(id)); });
-app.patch('/missions/:id', (req, res) => { const { status } = req.body; db.prepare('UPDATE missions SET status=?, completed_at=? WHERE id=?').run(status, status === 'completed' ? now() : null, req.params.id); res.json(db.prepare('SELECT * FROM missions WHERE id=?').get(req.params.id)); });
-app.delete('/missions/:id', (req, res) => { db.prepare('DELETE FROM missions WHERE id=?').run(req.params.id); res.json({ success: true }); });
+app.get('/missions', async (_, res) => { const r = await pool.query('SELECT * FROM missions ORDER BY scheduled_date ASC'); res.json(r.rows); });
+app.post('/missions', async (req, res) => { const { title, description = '', scheduled_date, status = 'pending' } = req.body; if (!title) return res.status(400).json({ error: 'title obrigatório' }); const id = uuid(); await pool.query('INSERT INTO missions (id,title,description,scheduled_date,status) VALUES ($1,$2,$3,$4,$5)', [id, title, description, scheduled_date, status]); const r = await pool.query('SELECT * FROM missions WHERE id=$1', [id]); res.json(r.rows[0]); });
+app.patch('/missions/:id', async (req, res) => { const { status } = req.body; const completed_at = status === 'completed' ? now() : null; await pool.query('UPDATE missions SET status=$1, completed_at=$2 WHERE id=$3', [status, completed_at, req.params.id]); const r = await pool.query('SELECT * FROM missions WHERE id=$1', [req.params.id]); res.json(r.rows[0]); });
+app.delete('/missions/:id', async (req, res) => { await pool.query('DELETE FROM missions WHERE id=$1', [req.params.id]); res.json({ success: true }); });
 
 // NOTES
-app.get('/notes', (_, res) => res.json(db.prepare('SELECT * FROM notes ORDER BY updated_at DESC').all()));
-app.post('/notes', (req, res) => { const { content } = req.body; if (!content) return res.status(400).json({ error: 'content obrigatório' }); const id = uuid(); db.prepare('INSERT INTO notes (id,content) VALUES (?,?)').run(id, content); res.json(db.prepare('SELECT * FROM notes WHERE id=?').get(id)); });
-app.patch('/notes/:id', (req, res) => { const { content } = req.body; db.prepare('UPDATE notes SET content=?, updated_at=? WHERE id=?').run(content, now(), req.params.id); res.json(db.prepare('SELECT * FROM notes WHERE id=?').get(req.params.id)); });
-app.delete('/notes/:id', (req, res) => { db.prepare('DELETE FROM notes WHERE id=?').run(req.params.id); res.json({ success: true }); });
+app.get('/notes', async (_, res) => { const r = await pool.query('SELECT * FROM notes ORDER BY updated_at DESC'); res.json(r.rows); });
+app.post('/notes', async (req, res) => { const { content } = req.body; if (!content) return res.status(400).json({ error: 'content obrigatório' }); const id = uuid(); await pool.query('INSERT INTO notes (id,content) VALUES ($1,$2)', [id, content]); const r = await pool.query('SELECT * FROM notes WHERE id=$1', [id]); res.json(r.rows[0]); });
+app.patch('/notes/:id', async (req, res) => { const { content } = req.body; await pool.query('UPDATE notes SET content=$1, updated_at=$2 WHERE id=$3', [content, now(), req.params.id]); const r = await pool.query('SELECT * FROM notes WHERE id=$1', [req.params.id]); res.json(r.rows[0]); });
+app.delete('/notes/:id', async (req, res) => { await pool.query('DELETE FROM notes WHERE id=$1', [req.params.id]); res.json({ success: true }); });
 
 // PURCHASES
-app.get('/purchases', (_, res) => res.json(db.prepare('SELECT * FROM purchases ORDER BY created_at DESC').all()));
-app.post('/purchases', (req, res) => { const { item, quantity, price, status = 'pending' } = req.body; if (!item) return res.status(400).json({ error: 'item obrigatório' }); const id = uuid(); db.prepare('INSERT INTO purchases (id,item,quantity,price,status) VALUES (?,?,?,?,?)').run(id, item, quantity, price, status); res.json(db.prepare('SELECT * FROM purchases WHERE id=?').get(id)); });
-app.patch('/purchases/:id', (req, res) => { const { status } = req.body; db.prepare('UPDATE purchases SET status=? WHERE id=?').run(status, req.params.id); res.json(db.prepare('SELECT * FROM purchases WHERE id=?').get(req.params.id)); });
-app.delete('/purchases/:id', (req, res) => { db.prepare('DELETE FROM purchases WHERE id=?').run(req.params.id); res.json({ success: true }); });
+app.get('/purchases', async (_, res) => { const r = await pool.query('SELECT * FROM purchases ORDER BY created_at DESC'); res.json(r.rows); });
+app.post('/purchases', async (req, res) => { const { item, quantity, price, status = 'pending' } = req.body; if (!item) return res.status(400).json({ error: 'item obrigatório' }); const id = uuid(); await pool.query('INSERT INTO purchases (id,item,quantity,price,status) VALUES ($1,$2,$3,$4,$5)', [id, item, quantity, price, status]); const r = await pool.query('SELECT * FROM purchases WHERE id=$1', [id]); res.json(r.rows[0]); });
+app.patch('/purchases/:id', async (req, res) => { const { status } = req.body; await pool.query('UPDATE purchases SET status=$1 WHERE id=$2', [status, req.params.id]); const r = await pool.query('SELECT * FROM purchases WHERE id=$1', [req.params.id]); res.json(r.rows[0]); });
+app.delete('/purchases/:id', async (req, res) => { await pool.query('DELETE FROM purchases WHERE id=$1', [req.params.id]); res.json({ success: true }); });
 
 // SALES
-app.get('/sales', (_, res) => res.json(db.prepare('SELECT * FROM sales ORDER BY created_at DESC').all()));
-app.post('/sales', (req, res) => { const { item, quantity, price, buyer = '' } = req.body; if (!item) return res.status(400).json({ error: 'item obrigatório' }); const id = uuid(); db.prepare('INSERT INTO sales (id,item,quantity,price,buyer) VALUES (?,?,?,?,?)').run(id, item, quantity, price, buyer); res.json(db.prepare('SELECT * FROM sales WHERE id=?').get(id)); });
-app.delete('/sales/:id', (req, res) => { db.prepare('DELETE FROM sales WHERE id=?').run(req.params.id); res.json({ success: true }); });
+app.get('/sales', async (_, res) => { const r = await pool.query('SELECT * FROM sales ORDER BY created_at DESC'); res.json(r.rows); });
+app.post('/sales', async (req, res) => { const { item, quantity, price, buyer = '' } = req.body; if (!item) return res.status(400).json({ error: 'item obrigatório' }); const id = uuid(); await pool.query('INSERT INTO sales (id,item,quantity,price,buyer) VALUES ($1,$2,$3,$4,$5)', [id, item, quantity, price, buyer]); const r = await pool.query('SELECT * FROM sales WHERE id=$1', [id]); res.json(r.rows[0]); });
+app.delete('/sales/:id', async (req, res) => { await pool.query('DELETE FROM sales WHERE id=$1', [req.params.id]); res.json({ success: true }); });
 
 // DELIVERIES
-app.get('/deliveries', (_, res) => res.json(db.prepare('SELECT * FROM deliveries ORDER BY created_at DESC').all()));
-app.post('/deliveries', (req, res) => { const { description, recipient, status = 'pending' } = req.body; if (!description || !recipient) return res.status(400).json({ error: 'description e recipient obrigatórios' }); const id = uuid(); db.prepare('INSERT INTO deliveries (id,description,recipient,status) VALUES (?,?,?,?)').run(id, description, recipient, status); res.json(db.prepare('SELECT * FROM deliveries WHERE id=?').get(id)); });
-app.patch('/deliveries/:id', (req, res) => { const { status } = req.body; db.prepare('UPDATE deliveries SET status=?, completed_at=? WHERE id=?').run(status, status === 'completed' ? now() : null, req.params.id); res.json(db.prepare('SELECT * FROM deliveries WHERE id=?').get(req.params.id)); });
-app.delete('/deliveries/:id', (req, res) => { db.prepare('DELETE FROM deliveries WHERE id=?').run(req.params.id); res.json({ success: true }); });
+app.get('/deliveries', async (_, res) => { const r = await pool.query('SELECT * FROM deliveries ORDER BY created_at DESC'); res.json(r.rows); });
+app.post('/deliveries', async (req, res) => { const { description, recipient, status = 'pending' } = req.body; if (!description || !recipient) return res.status(400).json({ error: 'obrigatórios' }); const id = uuid(); await pool.query('INSERT INTO deliveries (id,description,recipient,status) VALUES ($1,$2,$3,$4)', [id, description, recipient, status]); const r = await pool.query('SELECT * FROM deliveries WHERE id=$1', [id]); res.json(r.rows[0]); });
+app.patch('/deliveries/:id', async (req, res) => { const { status } = req.body; const completed_at = status === 'completed' ? now() : null; await pool.query('UPDATE deliveries SET status=$1, completed_at=$2 WHERE id=$3', [status, completed_at, req.params.id]); const r = await pool.query('SELECT * FROM deliveries WHERE id=$1', [req.params.id]); res.json(r.rows[0]); });
+app.delete('/deliveries/:id', async (req, res) => { await pool.query('DELETE FROM deliveries WHERE id=$1', [req.params.id]); res.json({ success: true }); });
 
 // MEMBERS
-app.get('/members', (_, res) => res.json(db.prepare('SELECT * FROM members ORDER BY created_at DESC').all()));
-app.post('/members', (req, res) => { const { name, role = 'Recruta', kick_channel = '', avatar_url = '', joined_at = '', status = 'active' } = req.body; if (!name) return res.status(400).json({ error: 'name obrigatório' }); const id = uuid(); db.prepare('INSERT INTO members (id,name,role,kick_channel,avatar_url,joined_at,status) VALUES (?,?,?,?,?,?,?)').run(id, name, role, kick_channel, avatar_url, joined_at, status); res.json(db.prepare('SELECT * FROM members WHERE id=?').get(id)); });
-app.patch('/members/:id', (req, res) => { const { name, role, kick_channel, avatar_url, joined_at, status } = req.body; db.prepare('UPDATE members SET name=?, role=?, kick_channel=?, avatar_url=?, joined_at=?, status=? WHERE id=?').run(name, role, kick_channel ?? '', avatar_url ?? '', joined_at ?? '', status, req.params.id); res.json(db.prepare('SELECT * FROM members WHERE id=?').get(req.params.id)); });
-app.delete('/members/:id', (req, res) => { db.prepare('DELETE FROM members WHERE id=?').run(req.params.id); res.json({ success: true }); });
+app.get('/members', async (_, res) => { const r = await pool.query('SELECT * FROM members ORDER BY created_at DESC'); res.json(r.rows); });
+app.post('/members', async (req, res) => { const { name, role = 'Recruta', kick_channel = '', avatar_url = '', joined_at = '', status = 'active' } = req.body; if (!name) return res.status(400).json({ error: 'name obrigatório' }); const id = uuid(); await pool.query('INSERT INTO members (id,name,role,kick_channel,avatar_url,joined_at,status) VALUES ($1,$2,$3,$4,$5,$6,$7)', [id, name, role, kick_channel, avatar_url, joined_at, status]); const r = await pool.query('SELECT * FROM members WHERE id=$1', [id]); res.json(r.rows[0]); });
+app.patch('/members/:id', async (req, res) => { const { name, role, kick_channel, avatar_url, joined_at, status } = req.body; await pool.query('UPDATE members SET name=$1, role=$2, kick_channel=$3, avatar_url=$4, joined_at=$5, status=$6 WHERE id=$7', [name, role, kick_channel ?? '', avatar_url ?? '', joined_at ?? '', status, req.params.id]); const r = await pool.query('SELECT * FROM members WHERE id=$1', [req.params.id]); res.json(r.rows[0]); });
+app.delete('/members/:id', async (req, res) => { await pool.query('DELETE FROM members WHERE id=$1', [req.params.id]); res.json({ success: true }); });
 
 // TRANSACTIONS
-app.get('/transactions', (_, res) => res.json(db.prepare('SELECT * FROM transactions ORDER BY created_at DESC').all()));
-app.post('/transactions', (req, res) => { const { type, description, amount } = req.body; if (!type || !description || !amount) return res.status(400).json({ error: 'obrigatórios' }); const id = uuid(); db.prepare('INSERT INTO transactions (id,type,description,amount) VALUES (?,?,?,?)').run(id, type, description, amount); res.json(db.prepare('SELECT * FROM transactions WHERE id=?').get(id)); });
-app.delete('/transactions/:id', (req, res) => { db.prepare('DELETE FROM transactions WHERE id=?').run(req.params.id); res.json({ success: true }); });
+app.get('/transactions', async (_, res) => { const r = await pool.query('SELECT * FROM transactions ORDER BY created_at DESC'); res.json(r.rows); });
+app.post('/transactions', async (req, res) => { const { type, description, amount } = req.body; if (!type || !description || !amount) return res.status(400).json({ error: 'obrigatórios' }); const id = uuid(); await pool.query('INSERT INTO transactions (id,type,description,amount) VALUES ($1,$2,$3,$4)', [id, type, description, amount]); const r = await pool.query('SELECT * FROM transactions WHERE id=$1', [id]); res.json(r.rows[0]); });
+app.delete('/transactions/:id', async (req, res) => { await pool.query('DELETE FROM transactions WHERE id=$1', [req.params.id]); res.json({ success: true }); });
 
 // STOCK
-app.get('/stock', (_, res) => res.json(db.prepare('SELECT * FROM stock ORDER BY category ASC, name ASC').all()));
-app.post('/stock', (req, res) => { const { name, quantity, category = 'Item' } = req.body; if (!name || !quantity) return res.status(400).json({ error: 'name e quantity obrigatórios' }); const id = uuid(); db.prepare('INSERT INTO stock (id,name,quantity,category) VALUES (?,?,?,?)').run(id, name, quantity, category); res.json(db.prepare('SELECT * FROM stock WHERE id=?').get(id)); });
-app.patch('/stock/:id', (req, res) => { const { name, quantity, category } = req.body; db.prepare('UPDATE stock SET name=?, quantity=?, category=? WHERE id=?').run(name, quantity, category, req.params.id); res.json(db.prepare('SELECT * FROM stock WHERE id=?').get(req.params.id)); });
-app.delete('/stock/:id', (req, res) => { db.prepare('DELETE FROM stock WHERE id=?').run(req.params.id); res.json({ success: true }); });
+app.get('/stock', async (_, res) => { const r = await pool.query('SELECT * FROM stock ORDER BY category ASC, name ASC'); res.json(r.rows); });
+app.post('/stock', async (req, res) => { const { name, quantity, category = 'Item' } = req.body; if (!name || !quantity) return res.status(400).json({ error: 'name e quantity obrigatórios' }); const id = uuid(); await pool.query('INSERT INTO stock (id,name,quantity,category) VALUES ($1,$2,$3,$4)', [id, name, quantity, category]); const r = await pool.query('SELECT * FROM stock WHERE id=$1', [id]); res.json(r.rows[0]); });
+app.patch('/stock/:id', async (req, res) => { const { name, quantity, category } = req.body; await pool.query('UPDATE stock SET name=$1, quantity=$2, category=$3 WHERE id=$4', [name, quantity, category, req.params.id]); const r = await pool.query('SELECT * FROM stock WHERE id=$1', [req.params.id]); res.json(r.rows[0]); });
+app.delete('/stock/:id', async (req, res) => { await pool.query('DELETE FROM stock WHERE id=$1', [req.params.id]); res.json({ success: true }); });
 
 // KICK STATUS
 app.get('/kick-status/:channel', async (req, res) => {
