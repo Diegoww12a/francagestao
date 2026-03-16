@@ -59,9 +59,13 @@ db.exec(`
     id TEXT PRIMARY KEY, type TEXT NOT NULL, description TEXT NOT NULL,
     amount INTEGER NOT NULL, created_at TEXT DEFAULT (datetime('now'))
   );
+  CREATE TABLE IF NOT EXISTS stock (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, quantity INTEGER NOT NULL,
+    category TEXT DEFAULT 'Item', created_at TEXT DEFAULT (datetime('now'))
+  );
 `);
 
-const PASSWORD_HASH = process.env.PASSWORD_HASH || '$2b$10$Sumorq07XeLe93jpJ4TcHOAkp2XJV3FCxPGh3LcaBG.xjfWhV0c9K';
+const PASSWORD_HASH = process.env.PASSWORD_HASH || '$2b$10$bn7SVyBy3fULDf7jK4wc.uTRO4XDDtXaJ6qDzqO5yhrG6PNueiJvK';
 
 app.post('/login', async (req, res) => {
   const { password } = req.body;
@@ -119,6 +123,12 @@ app.delete('/members/:id', (req, res) => { db.prepare('DELETE FROM members WHERE
 app.get('/transactions', (_, res) => res.json(db.prepare('SELECT * FROM transactions ORDER BY created_at DESC').all()));
 app.post('/transactions', (req, res) => { const { type, description, amount } = req.body; if (!type || !description || !amount) return res.status(400).json({ error: 'obrigatórios' }); const id = uuid(); db.prepare('INSERT INTO transactions (id,type,description,amount) VALUES (?,?,?,?)').run(id, type, description, amount); res.json(db.prepare('SELECT * FROM transactions WHERE id=?').get(id)); });
 app.delete('/transactions/:id', (req, res) => { db.prepare('DELETE FROM transactions WHERE id=?').run(req.params.id); res.json({ success: true }); });
+
+// STOCK
+app.get('/stock', (_, res) => res.json(db.prepare('SELECT * FROM stock ORDER BY category ASC, name ASC').all()));
+app.post('/stock', (req, res) => { const { name, quantity, category = 'Item' } = req.body; if (!name || !quantity) return res.status(400).json({ error: 'name e quantity obrigatórios' }); const id = uuid(); db.prepare('INSERT INTO stock (id,name,quantity,category) VALUES (?,?,?,?)').run(id, name, quantity, category); res.json(db.prepare('SELECT * FROM stock WHERE id=?').get(id)); });
+app.patch('/stock/:id', (req, res) => { const { name, quantity, category } = req.body; db.prepare('UPDATE stock SET name=?, quantity=?, category=? WHERE id=?').run(name, quantity, category, req.params.id); res.json(db.prepare('SELECT * FROM stock WHERE id=?').get(req.params.id)); });
+app.delete('/stock/:id', (req, res) => { db.prepare('DELETE FROM stock WHERE id=?').run(req.params.id); res.json({ success: true }); });
 
 // KICK STATUS
 app.get('/kick-status/:channel', async (req, res) => {
