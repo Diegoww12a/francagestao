@@ -10,6 +10,7 @@ const db = new Database('data.db');
 const allowedOrigins = [
   'https://diegoww12a.github.io',
   'https://franca-dashboard.netlify.app',
+  'https://francagestao.netlify.app',
   'http://localhost:5173'
 ];
 
