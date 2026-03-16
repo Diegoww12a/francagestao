@@ -50,7 +50,9 @@ db.exec(`
   );
   CREATE TABLE IF NOT EXISTS members (
     id TEXT PRIMARY KEY, name TEXT NOT NULL, role TEXT DEFAULT 'Recruta',
-    status TEXT DEFAULT 'active', created_at TEXT DEFAULT (datetime('now'))
+    kick_channel TEXT DEFAULT '', avatar_url TEXT DEFAULT '',
+    joined_at TEXT DEFAULT '', status TEXT DEFAULT 'active',
+    created_at TEXT DEFAULT (datetime('now'))
   );
   CREATE TABLE IF NOT EXISTS transactions (
     id TEXT PRIMARY KEY, type TEXT NOT NULL, description TEXT NOT NULL,
@@ -108,14 +110,30 @@ app.delete('/deliveries/:id', (req, res) => { db.prepare('DELETE FROM deliveries
 
 // MEMBERS
 app.get('/members', (_, res) => res.json(db.prepare('SELECT * FROM members ORDER BY created_at DESC').all()));
-app.post('/members', (req, res) => { const { name, role = 'Recruta', status = 'active' } = req.body; if (!name) return res.status(400).json({ error: 'name obrigatório' }); const id = uuid(); db.prepare('INSERT INTO members (id,name,role,status) VALUES (?,?,?,?)').run(id, name, role, status); res.json(db.prepare('SELECT * FROM members WHERE id=?').get(id)); });
-app.patch('/members/:id', (req, res) => { const { name, role, status } = req.body; db.prepare('UPDATE members SET name=?, role=?, status=? WHERE id=?').run(name, role, status, req.params.id); res.json(db.prepare('SELECT * FROM members WHERE id=?').get(req.params.id)); });
+app.post('/members', (req, res) => { const { name, role = 'Recruta', kick_channel = '', avatar_url = '', joined_at = '', status = 'active' } = req.body; if (!name) return res.status(400).json({ error: 'name obrigatório' }); const id = uuid(); db.prepare('INSERT INTO members (id,name,role,kick_channel,avatar_url,joined_at,status) VALUES (?,?,?,?,?,?,?)').run(id, name, role, kick_channel, avatar_url, joined_at, status); res.json(db.prepare('SELECT * FROM members WHERE id=?').get(id)); });
+app.patch('/members/:id', (req, res) => { const { name, role, kick_channel, avatar_url, joined_at, status } = req.body; db.prepare('UPDATE members SET name=?, role=?, kick_channel=?, avatar_url=?, joined_at=?, status=? WHERE id=?').run(name, role, kick_channel ?? '', avatar_url ?? '', joined_at ?? '', status, req.params.id); res.json(db.prepare('SELECT * FROM members WHERE id=?').get(req.params.id)); });
 app.delete('/members/:id', (req, res) => { db.prepare('DELETE FROM members WHERE id=?').run(req.params.id); res.json({ success: true }); });
 
 // TRANSACTIONS
 app.get('/transactions', (_, res) => res.json(db.prepare('SELECT * FROM transactions ORDER BY created_at DESC').all()));
-app.post('/transactions', (req, res) => { const { type, description, amount } = req.body; if (!type || !description || !amount) return res.status(400).json({ error: 'type, description e amount obrigatórios' }); const id = uuid(); db.prepare('INSERT INTO transactions (id,type,description,amount) VALUES (?,?,?,?)').run(id, type, description, amount); res.json(db.prepare('SELECT * FROM transactions WHERE id=?').get(id)); });
+app.post('/transactions', (req, res) => { const { type, description, amount } = req.body; if (!type || !description || !amount) return res.status(400).json({ error: 'obrigatórios' }); const id = uuid(); db.prepare('INSERT INTO transactions (id,type,description,amount) VALUES (?,?,?,?)').run(id, type, description, amount); res.json(db.prepare('SELECT * FROM transactions WHERE id=?').get(id)); });
 app.delete('/transactions/:id', (req, res) => { db.prepare('DELETE FROM transactions WHERE id=?').run(req.params.id); res.json({ success: true }); });
+
+// KICK STATUS
+app.get('/kick-status/:channel', async (req, res) => {
+  try {
+    const r = await fetch(`https://kick.com/api/v2/channels/${req.params.channel}`, {
+      headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+    });
+    if (!r.ok) return res.status(502).json({ error: 'Canal não encontrado' });
+    const data = await r.json();
+    const isLive = data.livestream?.is_live === true;
+    const viewers = data.livestream?.viewer_count || 0;
+    res.json({ isLive, viewers });
+  } catch {
+    res.status(502).json({ error: 'Erro ao consultar Kick' });
+  }
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Backend rodando na porta ${PORT}`));

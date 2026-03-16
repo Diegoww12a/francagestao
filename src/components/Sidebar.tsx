@@ -1,9 +1,6 @@
-import { CheckSquare, Target, StickyNote, ShoppingCart, TrendingUp, Package, History, Users, Wallet } from 'lucide-react';
+import { CheckSquare, Target, StickyNote, ShoppingCart, TrendingUp, Package, History, Users, Wallet, Archive } from 'lucide-react';
 
-interface SidebarProps {
-  activeSection: string;
-  onSectionChange: (section: string) => void;
-}
+interface SidebarProps { activeSection: string; onSectionChange: (section: string) => void; }
 
 const menuItems = [
   { id: 'tasks', label: 'Tarefas', icon: CheckSquare, color: 'from-blue-600 to-blue-700' },
@@ -28,13 +25,12 @@ export default function Sidebar({ activeSection, onSectionChange }: SidebarProps
         </div>
         <p className="text-xs text-gray-400 ml-4">Painel de Controle</p>
       </div>
-
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeSection === item.id;
           return (
-            <button key={item.id} onClick={() => onSectionChange(item.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 relative group ${isActive ? `bg-gradient-to-r ${item.color} text-white shadow-lg shadow-current/30` : 'text-gray-400 hover:text-white hover:bg-gray-800/50'}`}>
+            <button key={item.id} onClick={() => onSectionChange(item.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 relative group ${isActive ? `bg-gradient-to-r ${item.color} text-white shadow-lg` : 'text-gray-400 hover:text-white hover:bg-gray-800/50'}`}>
               {isActive && <div className="absolute inset-0 bg-gradient-to-r from-current/20 to-transparent rounded-lg blur"></div>}
               <Icon size={20} className="relative z-10" />
               <span className="font-medium relative z-10">{item.label}</span>
@@ -43,7 +39,6 @@ export default function Sidebar({ activeSection, onSectionChange }: SidebarProps
           );
         })}
       </nav>
-
       <div className="p-4 border-t border-gray-800/50 bg-gray-900/50">
         <p className="text-xs text-gray-500 text-center">v1.0 • Gestão da França</p>
       </div>
