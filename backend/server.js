@@ -5,7 +5,7 @@ import pg from 'pg';
 import { randomUUID } from 'crypto';
 
 const app = express();
-const { Pool } = pg;
+const { Pool } = pg
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://REDACTED_DB_USER:REDACTED_DB_PASSWORD@REDACTED_DB_HOST-a/francagestao_db',
