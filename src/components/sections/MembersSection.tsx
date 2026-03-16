@@ -176,7 +176,7 @@ export default function MembersSection() {
             </select>
             <div>
              <label className="text-xs text-gray-400 mb-1 block">Canal do Kick</label>
-             <input type="text" placeholder="ex: Kroozz" value={newMember.kick_channel} onChange={(e) => setNewMember({ ...newMember, kick_channel: e.target.value })} className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500" />
+             <input type="text" placeholder="ex: KroozzNS" value={newMember.kick_channel} onChange={(e) => setNewMember({ ...newMember, kick_channel: e.target.value })} className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500" />
             </div>
             <div>
               <label className="text-xs text-gray-400 mb-1 block">Data de entrada</label>
