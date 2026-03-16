@@ -68,10 +68,9 @@ db.exec(`
 const PASSWORD_HASH = process.env.PASSWORD_HASH || '$2b$10$bn7SVyBy3fULDf7jK4wc.uTRO4XDDtXaJ6qDzqO5yhrG6PNueiJvK';
 
 app.post('/login', async (req, res) => {
- const { password } = req.body;
- const passwordTrimmed = password?.trim();
+  const { password } = req.body;
   if (!password) return res.status(400).json({ error: 'Senha obrigatória' });
-  const ok = await bcrypt.compare(passwordTrimmed, PASSWORD_HASH);
+  const ok = await bcrypt.compare(password, PASSWORD_HASH);
   if (!ok) return res.status(401).json({ error: 'Senha incorreta' });
   res.json({ success: true });
 });
@@ -82,7 +81,7 @@ const now = () => new Date().toISOString();
 // TASKS
 app.get('/tasks', (_, res) => res.json(db.prepare('SELECT * FROM tasks ORDER BY created_at DESC').all()));
 app.post('/tasks', (req, res) => { const { title, description = '', status = 'pending' } = req.body; if (!title) return res.status(400).json({ error: 'title obrigatório' }); const id = uuid(); db.prepare('INSERT INTO tasks (id,title,description,status) VALUES (?,?,?,?)').run(id, title, description, status); res.json(db.prepare('SELECT * FROM tasks WHERE id=?').get(id)); });
-app.patch('/tasks/:id', (req, res) => { const { status } = req. ; db.prepare('UPDATE tasks SET status=?, completed_at=? WHERE id=?').run(status, status === 'completed' ? now() : null, req.params.id); res.json(db.prepare('SELECT * FROM tasks WHERE id=?').get(req.params.id)); });
+app.patch('/tasks/:id', (req, res) => { const { status } = req.body; db.prepare('UPDATE tasks SET status=?, completed_at=? WHERE id=?').run(status, status === 'completed' ? now() : null, req.params.id); res.json(db.prepare('SELECT * FROM tasks WHERE id=?').get(req.params.id)); });
 app.delete('/tasks/:id', (req, res) => { db.prepare('DELETE FROM tasks WHERE id=?').run(req.params.id); res.json({ success: true }); });
 
 // MISSIONS
@@ -99,7 +98,7 @@ app.delete('/notes/:id', (req, res) => { db.prepare('DELETE FROM notes WHERE id=
 
 // PURCHASES
 app.get('/purchases', (_, res) => res.json(db.prepare('SELECT * FROM purchases ORDER BY created_at DESC').all()));
-app.post('/purchases', (req, res) => { const { item, quantity, price, status = 'pending' } = req. ; if (!item) return res.status(400).json({ error: 'item obrigatório' }); const id = uuid(); db.prepare('INSERT INTO purchases (id,item,quantity,price,status) VALUES (?,?,?,?,?)').run(id, item, quantity, price, status); res.json(db.prepare('SELECT * FROM purchases WHERE id=?').get(id)); });
+app.post('/purchases', (req, res) => { const { item, quantity, price, status = 'pending' } = req.body; if (!item) return res.status(400).json({ error: 'item obrigatório' }); const id = uuid(); db.prepare('INSERT INTO purchases (id,item,quantity,price,status) VALUES (?,?,?,?,?)').run(id, item, quantity, price, status); res.json(db.prepare('SELECT * FROM purchases WHERE id=?').get(id)); });
 app.patch('/purchases/:id', (req, res) => { const { status } = req.body; db.prepare('UPDATE purchases SET status=? WHERE id=?').run(status, req.params.id); res.json(db.prepare('SELECT * FROM purchases WHERE id=?').get(req.params.id)); });
 app.delete('/purchases/:id', (req, res) => { db.prepare('DELETE FROM purchases WHERE id=?').run(req.params.id); res.json({ success: true }); });
 
