@@ -183,40 +183,6 @@ app.get('/kick-status/:channel', async (req, res) => {
   }
 });
 
-app.get('/twitch-status/:channel', async (req, res) => {
-  try {
-    const tokenRes = await fetch('https://id.twitch.tv/oauth2/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: process.env.TWITCH_CLIENT_ID,
-        client_secret: process.env.TWITCH_CLIENT_SECRET,
-        grant_type: 'client_credentials'
-      })
-    });
-
-    const tokenData = await tokenRes.json();
-
-    const r = await fetch(
-      `https://api.twitch.tv/helix/streams?user_login=${req.params.channel}`,
-      {
-        headers: {
-          'Client-Id': process.env.TWITCH_CLIENT_ID,
-          'Authorization': `Bearer ${tokenData.access_token}`
-        }
-      }
-    );
-
-    const data = await r.json();
-    const isLive = data.data.length > 0;
-
-    res.json({ isLive });
-  } catch {
-    res.status(502).json({ error: 'Erro ao consultar Twitch' });
-  }
-});
-
-
 // MIGRATE
 app.get('/migrate', async (_, res) => {
   try {
