@@ -158,11 +158,6 @@ app.get('/kick-status/:channel', async (req, res) => {
 });
 
 app.get('/health', (_, res) => res.json({ status: 'ok' }));
-```
-
-Depois no UptimeRobot muda a URL para:
-```
-https://francagestao-ttfr.onrender.com/health
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Backend rodando na porta ${PORT}`));
