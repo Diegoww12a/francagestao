@@ -203,35 +203,151 @@ export default function MembersSection() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-700">
-            {filteredMembers.map(m => {
-              const live = liveStatuses[m.id];
-              const hasKick = m.kick_channel?.trim();
-              return (
-               <tr key={m.id} onClick={() => editingId !== m.id && setSelectedMember(m)} className={`cursor-pointer hover:bg-gray-700/50 transition-colors ${live?.isLive ? 'bg-green-500/5' : ''}`}>
-                  <td className="px-6 py-4">
-                    {!hasKick
-                      ? <span className="text-gray-600 text-xs">—</span>
-                      : live?.loading
-                        ? <span className="flex items-center gap-1 text-gray-500 text-xs"><div className="w-2 h-2 rounded-full bg-gray-500 animate-pulse"></div> ...</span>
-                        : live?.isLive
-                          ? <span className="flex items-center gap-1 text-green-400 text-xs font-semibold"><Wifi size={12} /> Online</span>
-                          : <span className="flex items-center gap-1 text-gray-500 text-xs"><WifiOff size={12} /> Offline</span>
-                    }
-                  </td>
-                  <td className="px-6 py-4">
-                    {editingId === m.id
-                      ? <input value={editData.name} onChange={(e) => setEditData({ ...editData, name: e.target.value })} className="bg-gray-900 border border-gray-700 rounded px-3 py-1 text-white w-full" />
-                      : <button onClick={() => setSelectedMember(m)} className="text-white font-medium hover:text-blue-400 transition-colors text-left">{m.name}</button>
-                    }
-                  </td>
-                  <td className="px-6 py-4">{editingId === m.id ? <select value={editData.role} onChange={(e) => setEditData({ ...editData, role: e.target.value })} className="bg-gray-900 border border-gray-700 rounded px-3 py-1 text-white">{ROLES.map(r => <option key={r} value={r}>{r}</option>)}</select> : <span className="text-gray-300">{m.role}</span>}</td>
-                  <td className="px-6 py-4">{editingId === m.id ? <input value={editData.kick_channel} onChange={(e) => setEditData({ ...editData, kick_channel: e.target.value })} placeholder="canal" className="bg-gray-900 border border-gray-700 rounded px-3 py-1 text-white w-full" /> : <span className="text-gray-400 text-sm">{m.kick_channel || '—'}</span>}</td>
-                  <td className="px-6 py-4">{editingId === m.id ? <select value={editData.status} onChange={(e) => setEditData({ ...editData, status: e.target.value as any })} className="bg-gray-900 border border-gray-700 rounded px-3 py-1 text-white"><option value="active">Ativo</option><option value="inactive">Inativo</option></select> : <span className={`px-3 py-1 rounded-full text-xs font-semibold ${m.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}`}>{m.status === 'active' ? 'Ativo' : 'Inativo'}</span>}</td>
-                  <td className="px-6 py-4 text-right"><div className="flex items-center justify-end gap-2">{editingId === m.id ? <button onClick={() => updateMember(m.id)} className="text-green-400 hover:text-green-300"><Save size={18} /></button> : <button onClick={() => startEdit(m)} className="text-gray-400 hover:text-blue-400"><Edit2 size={18} /></button>}<button onClick={() => deleteMember(m.id)} className="text-gray-400 hover:text-red-400"><Trash2 size={18} /></button></div></td>
-                </tr>
-              );
-            })}
-          </tbody>
+  {filteredMembers.map(m => {
+    const live = liveStatuses[m.id];
+    const hasKick = m.kick_channel?.trim();
+
+    return (
+      <tr
+        key={m.id}
+        onClick={() => editingId !== m.id && setSelectedMember(m)}
+        className={`cursor-pointer hover:bg-gray-700/50 transition-colors ${live?.isLive ? 'bg-green-500/5' : ''}`}
+      >
+        <td className="px-6 py-4">
+          {!hasKick ? (
+            <span className="text-gray-600 text-xs">—</span>
+          ) : live?.loading ? (
+            <span className="flex items-center gap-1 text-gray-500 text-xs">
+              <div className="w-2 h-2 rounded-full bg-gray-500 animate-pulse"></div> ...
+            </span>
+          ) : live?.isLive ? (
+            <span className="flex items-center gap-1 text-green-400 text-xs font-semibold">
+              Online
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 text-gray-500 text-xs">
+              Offline
+            </span>
+          )}
+        </td>
+
+        <td className="px-6 py-4">
+          {editingId === m.id ? (
+            <input
+              value={editData.name}
+              onChange={(e) => setEditData({ ...editData, name: e.target.value })}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-gray-900 border border-gray-700 rounded px-3 py-1 text-white w-full"
+            />
+          ) : (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedMember(m);
+              }}
+              className="text-white font-medium hover:text-blue-400 transition-colors text-left"
+            >
+              {m.name}
+            </button>
+          )}
+        </td>
+
+        <td className="px-6 py-4">
+          {editingId === m.id ? (
+            <select
+              value={editData.role}
+              onChange={(e) => setEditData({ ...editData, role: e.target.value })}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-gray-900 border border-gray-700 rounded px-3 py-1 text-white"
+            >
+              {ROLES.map(r => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
+          ) : (
+            <span className="text-gray-300">{m.role}</span>
+          )}
+        </td>
+
+        <td className="px-6 py-4">
+          {editingId === m.id ? (
+            <input
+              value={editData.kick_channel}
+              onChange={(e) => setEditData({ ...editData, kick_channel: e.target.value })}
+              onClick={(e) => e.stopPropagation()}
+              placeholder="canal"
+              className="bg-gray-900 border border-gray-700 rounded px-3 py-1 text-white w-full"
+            />
+          ) : (
+            <span className="text-gray-400 text-sm">
+              {m.kick_channel || '—'}
+            </span>
+          )}
+        </td>
+
+        <td className="px-6 py-4">
+          {editingId === m.id ? (
+            <select
+              value={editData.status}
+              onChange={(e) => setEditData({ ...editData, status: e.target.value as any })}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-gray-900 border border-gray-700 rounded px-3 py-1 text-white"
+            >
+              <option value="active">Ativo</option>
+              <option value="inactive">Inativo</option>
+            </select>
+          ) : (
+            <span
+              className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                m.status === 'active'
+                  ? 'bg-green-500/20 text-green-400'
+                  : 'bg-gray-500/20 text-gray-400'
+              }`}
+            >
+              {m.status === 'active' ? 'Ativo' : 'Inativo'}
+            </span>
+          )}
+        </td>
+
+        <td className="px-6 py-4 text-right">
+          <div className="flex items-center justify-end gap-2">
+            {editingId === m.id ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  updateMember(m.id);
+                }}
+                className="text-green-400 hover:text-green-300"
+              >
+                Salvar
+              </button>
+            ) : (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  startEdit(m);
+                }}
+                className="text-gray-400 hover:text-blue-400"
+              >
+                Editar
+              </button>
+            )}
+
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                deleteMember(m.id);
+              }}
+              className="text-gray-400 hover:text-red-400"
+            >
+              Excluir
+            </button>
+          </div>
+        </td>
+      </tr>
+    );
+  })}
+</tbody>
         </table>
         {filteredMembers.length === 0 && <div className="text-center py-12"><p className="text-gray-500">Nenhum membro encontrado</p></div>}
       </div>
