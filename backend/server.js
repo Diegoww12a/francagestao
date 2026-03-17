@@ -5,7 +5,7 @@ import pg from 'pg';
 import { randomUUID } from 'crypto';
 
 const app = express();
-const { Pool } = pg
+const { Pool } = pg;
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://francagestao_db_user:LSGPLhjLaqNCPmMFo21GP28gQcmpYdhO@dpg-d6s7drua2pns73dhioo0-a/francagestao_db',
@@ -28,7 +28,6 @@ app.use(cors({
 
 app.use(express.json());
 
-// Criar tabelas
 async function initDB() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS tasks (
@@ -70,6 +69,11 @@ async function initDB() {
       id TEXT PRIMARY KEY, name TEXT NOT NULL, quantity INTEGER NOT NULL,
       category TEXT DEFAULT 'Item', created_at TIMESTAMPTZ DEFAULT NOW()
     );
+    CREATE TABLE IF NOT EXISTS goals (
+      id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT DEFAULT '',
+      type TEXT DEFAULT 'free', target INTEGER NOT NULL, current INTEGER DEFAULT 0,
+      unit TEXT DEFAULT '', status TEXT DEFAULT 'active', created_at TIMESTAMPTZ DEFAULT NOW()
+    );
   `);
   console.log('Banco de dados inicializado!');
 }
@@ -80,7 +84,6 @@ const PASSWORD_HASH = process.env.PASSWORD_HASH || '$2b$10$bn7SVyBy3fULDf7jK4wc.
 const uuid = () => randomUUID();
 const now = () => new Date().toISOString();
 
-// AUTH
 app.post('/login', async (req, res) => {
   const { password } = req.body;
   if (!password) return res.status(400).json({ error: 'Senha obrigatória' });
@@ -140,6 +143,12 @@ app.get('/stock', async (_, res) => { const r = await pool.query('SELECT * FROM 
 app.post('/stock', async (req, res) => { const { name, quantity, category = 'Item' } = req.body; if (!name || !quantity) return res.status(400).json({ error: 'name e quantity obrigatórios' }); const id = uuid(); await pool.query('INSERT INTO stock (id,name,quantity,category) VALUES ($1,$2,$3,$4)', [id, name, quantity, category]); const r = await pool.query('SELECT * FROM stock WHERE id=$1', [id]); res.json(r.rows[0]); });
 app.patch('/stock/:id', async (req, res) => { const { name, quantity, category } = req.body; await pool.query('UPDATE stock SET name=$1, quantity=$2, category=$3 WHERE id=$4', [name, quantity, category, req.params.id]); const r = await pool.query('SELECT * FROM stock WHERE id=$1', [req.params.id]); res.json(r.rows[0]); });
 app.delete('/stock/:id', async (req, res) => { await pool.query('DELETE FROM stock WHERE id=$1', [req.params.id]); res.json({ success: true }); });
+
+// GOALS
+app.get('/goals', async (_, res) => { const r = await pool.query('SELECT * FROM goals ORDER BY created_at DESC'); res.json(r.rows); });
+app.post('/goals', async (req, res) => { const { title, description = '', type = 'free', target, current = 0, unit = '' } = req.body; if (!title || !target) return res.status(400).json({ error: 'title e target obrigatórios' }); const id = uuid(); await pool.query('INSERT INTO goals (id,title,description,type,target,current,unit) VALUES ($1,$2,$3,$4,$5,$6,$7)', [id, title, description, type, target, current, unit]); const r = await pool.query('SELECT * FROM goals WHERE id=$1', [id]); res.json(r.rows[0]); });
+app.patch('/goals/:id', async (req, res) => { const { current, status } = req.body; if (status !== undefined) { await pool.query('UPDATE goals SET status=$1 WHERE id=$2', [status, req.params.id]); } else { await pool.query('UPDATE goals SET current=$1 WHERE id=$2', [current, req.params.id]); } const r = await pool.query('SELECT * FROM goals WHERE id=$1', [req.params.id]); res.json(r.rows[0]); });
+app.delete('/goals/:id', async (req, res) => { await pool.query('DELETE FROM goals WHERE id=$1', [req.params.id]); res.json({ success: true }); });
 
 // KICK STATUS
 app.get('/kick-status/:channel', async (req, res) => {
