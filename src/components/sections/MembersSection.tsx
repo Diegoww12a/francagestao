@@ -1,241 +1,287 @@
-import express from 'express';
-import cors from 'cors';
-import bcrypt from 'bcrypt';
-import pg from 'pg';
-import { randomUUID } from 'crypto';
+import { useState, useEffect, useCallback } from 'react';
+import { Plus, Trash2, Edit2, Save, Users, Wifi, WifiOff, RefreshCw, X, Calendar, Shield } from 'lucide-react';
+import { api } from '../../lib/api';
 
-const app = express();
-const { Pool } = pg;
+interface Member { id: string; name: string; role: string; kick_channel: string; twitch_channel: string; joined_at: string; status: 'active' | 'inactive'; created_at: string; }
+interface LiveStatus { isLive: boolean; loading: boolean; }
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://francagestao_db_user:LSGPLhjLaqNCPmMFo21GP28gQcmpYdhO@dpg-d6s7drua2pns73dhioo0-a/francagestao_db',
-  ssl: { rejectUnauthorized: false }
-});
+const ROLES = ['Líder', 'Co-Líder', 'Capitão', 'Soldado', 'Recruta'];
+const BASE = import.meta.env.VITE_API_URL || 'https://francagestao-ttfr.onrender.com';
+type FilterType = 'all' | 'online' | 'offline';
 
-const allowedOrigins = [
-  'https://diegoww12a.github.io',
-  'https://franca-dashboard.netlify.app',
-  'https://francagestao.netlify.app',
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'http://localhost:3000',
-];
+function MemberModal({ member, kickStatus, twitchStatus, onClose }: {
+  member: Member; kickStatus?: LiveStatus; twitchStatus?: LiveStatus; onClose: () => void;
+}) {
+  const joinedDate = member.joined_at ? new Date(member.joined_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }) : '—';
+  const createdDate = new Date(member.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+  const diasNaFaccao = () => {
+    const base = member.joined_at || member.created_at;
+    return Math.floor((Date.now() - new Date(base).getTime()) / (1000 * 60 * 60 * 24));
+  };
 
-app.use(cors({
-  origin(origin, cb) {
-    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-    if (origin && origin.startsWith('http://localhost')) return cb(null, true);
-    cb(new Error('CORS: origem não permitida'));
-  },
-  credentials: true,
-}));
-
-app.use(express.json());
-
-async function initDB() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS tasks (
-      id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT DEFAULT '',
-      status TEXT DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT NOW(), completed_at TIMESTAMPTZ
-    );
-    CREATE TABLE IF NOT EXISTS missions (
-      id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT DEFAULT '',
-      scheduled_date TEXT, status TEXT DEFAULT 'pending',
-      created_at TIMESTAMPTZ DEFAULT NOW(), completed_at TIMESTAMPTZ
-    );
-    CREATE TABLE IF NOT EXISTS notes (
-      id TEXT PRIMARY KEY, content TEXT NOT NULL,
-      created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS purchases (
-      id TEXT PRIMARY KEY, item TEXT NOT NULL, quantity INTEGER NOT NULL,
-      price INTEGER NOT NULL, status TEXT DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS sales (
-      id TEXT PRIMARY KEY, item TEXT NOT NULL, quantity INTEGER NOT NULL,
-      price INTEGER NOT NULL, buyer TEXT DEFAULT '', created_at TIMESTAMPTZ DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS deliveries (
-      id TEXT PRIMARY KEY, description TEXT NOT NULL, recipient TEXT NOT NULL,
-      status TEXT DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT NOW(), completed_at TIMESTAMPTZ
-    );
-    CREATE TABLE IF NOT EXISTS members (
-      id TEXT PRIMARY KEY, name TEXT NOT NULL, role TEXT DEFAULT 'Recruta',
-      kick_channel TEXT DEFAULT '', avatar_url TEXT DEFAULT '',
-      joined_at TEXT DEFAULT '', status TEXT DEFAULT 'active',
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS transactions (
-      id TEXT PRIMARY KEY, type TEXT NOT NULL, description TEXT NOT NULL,
-      amount INTEGER NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS stock (
-      id TEXT PRIMARY KEY, name TEXT NOT NULL, quantity INTEGER NOT NULL,
-      category TEXT DEFAULT 'Item', created_at TIMESTAMPTZ DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS goals (
-      id TEXT PRIMARY KEY, member_id TEXT NOT NULL, title TEXT NOT NULL,
-      target INTEGER NOT NULL, current INTEGER DEFAULT 0, unit TEXT DEFAULT '',
-      type TEXT DEFAULT 'free', deadline TEXT DEFAULT '',
-      status TEXT DEFAULT 'active', created_at TIMESTAMPTZ DEFAULT NOW()
-    );
-  `);
-  console.log('Banco de dados inicializado!');
+  return (
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="relative">
+          <div className="h-24 bg-gradient-to-r from-blue-600 to-purple-600 rounded-t-2xl"></div>
+          <button onClick={onClose} className="absolute top-3 right-3 text-white/70 hover:text-white"><X size={20} /></button>
+          <div className="absolute -bottom-10 left-6">
+            <div className="w-20 h-20 rounded-full border-4 border-gray-900 bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white text-2xl font-bold">{member.name.charAt(0).toUpperCase()}</div>
+          </div>
+          <div className="absolute -bottom-4 right-6 flex items-center gap-2">
+            {member.kick_channel && (
+              <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${kickStatus?.isLive ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-400'}`}>
+                {kickStatus?.isLive ? <><Wifi size={10} /> Kick</> : <><WifiOff size={10} /> Kick</>}
+              </div>
+            )}
+            {member.twitch_channel && (
+              <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${twitchStatus?.isLive ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-400'}`}>
+                {twitchStatus?.isLive ? <><Wifi size={10} /> Twitch</> : <><WifiOff size={10} /> Twitch</>}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="pt-14 px-6 pb-6">
+          <h2 className="text-2xl font-bold text-white">{member.name}</h2>
+          <p className="text-gray-400 text-sm mt-1">{member.role}</p>
+          <div className="mt-6 space-y-3">
+            <div className="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3">
+              <div className="flex items-center gap-2 text-gray-400 text-sm"><Shield size={16} /> Situação</div>
+              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${member.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}`}>{member.status === 'active' ? 'Ativo' : 'Inativo'}</span>
+            </div>
+            <div className="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3">
+              <div className="flex items-center gap-2 text-gray-400 text-sm"><Calendar size={16} /> Entrou em</div>
+              <span className="text-white text-sm">{joinedDate !== '—' ? joinedDate : createdDate}</span>
+            </div>
+            <div className="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3">
+              <div className="flex items-center gap-2 text-gray-400 text-sm">⏱️ Tempo na facção</div>
+              <span className="text-white text-sm font-semibold">{diasNaFaccao()} dias</span>
+            </div>
+            {member.kick_channel && (
+              <div className="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3">
+                <div className="flex items-center gap-2 text-gray-400 text-sm">🎮 Kick</div>
+                <a href={`https://kick.com/${member.kick_channel}`} target="_blank" rel="noopener noreferrer" className="text-green-400 hover:text-green-300 text-sm">kick.com/{member.kick_channel}</a>
+              </div>
+            )}
+            {member.twitch_channel && (
+              <div className="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3">
+                <div className="flex items-center gap-2 text-gray-400 text-sm">🟣 Twitch</div>
+                <a href={`https://twitch.tv/${member.twitch_channel}`} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 text-sm">twitch.tv/{member.twitch_channel}</a>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-initDB().catch(console.error);
+export default function MembersSection() {
+  const [members, setMembers] = useState<Member[]>([]);
+  const [kickStatuses, setKickStatuses] = useState<Record<string, LiveStatus>>({});
+  const [twitchStatuses, setTwitchStatuses] = useState<Record<string, LiveStatus>>({});
+  const [newMember, setNewMember] = useState({ name: '', role: 'Recruta', kick_channel: '', twitch_channel: '', joined_at: '', status: 'active' as const });
+  const [isAdding, setIsAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editData, setEditData] = useState({ name: '', role: '', kick_channel: '', twitch_channel: '', joined_at: '', status: 'active' as const });
+  const [filter, setFilter] = useState<FilterType>('all');
+  const [selectedMember, setSelectedMember] = useState<Member | null>(null);
 
-const PASSWORD_HASH = process.env.PASSWORD_HASH || '$2b$10$bn7SVyBy3fULDf7jK4wc.uTRO4XDDtXaJ6qDzqO5yhrG6PNueiJvK';
-const uuid = () => randomUUID();
-const now = () => new Date().toISOString();
+  useEffect(() => { fetchMembers(); }, []);
 
-app.post('/login', async (req, res) => {
-  const { password } = req.body;
-  if (!password) return res.status(400).json({ error: 'Senha obrigatória' });
-  const ok = await bcrypt.compare(password.trim(), PASSWORD_HASH);
-  if (!ok) return res.status(401).json({ error: 'Senha incorreta' });
-  res.json({ success: true });
-});
+  const fetchMembers = async () => {
+    const data = await api.getMembers();
+    setMembers(data);
+    fetchAllStatuses(data);
+  };
 
-// TASKS
-app.get('/tasks', async (_, res) => { const r = await pool.query('SELECT * FROM tasks ORDER BY created_at DESC'); res.json(r.rows); });
-app.post('/tasks', async (req, res) => { const { title, description = '', status = 'pending' } = req.body; if (!title) return res.status(400).json({ error: 'title obrigatório' }); const id = uuid(); await pool.query('INSERT INTO tasks (id,title,description,status) VALUES ($1,$2,$3,$4)', [id, title, description, status]); const r = await pool.query('SELECT * FROM tasks WHERE id=$1', [id]); res.json(r.rows[0]); });
-app.patch('/tasks/:id', async (req, res) => { const { status } = req.body; const completed_at = status === 'completed' ? now() : null; await pool.query('UPDATE tasks SET status=$1, completed_at=$2 WHERE id=$3', [status, completed_at, req.params.id]); const r = await pool.query('SELECT * FROM tasks WHERE id=$1', [req.params.id]); res.json(r.rows[0]); });
-app.delete('/tasks/:id', async (req, res) => { await pool.query('DELETE FROM tasks WHERE id=$1', [req.params.id]); res.json({ success: true }); });
+  const fetchAllStatuses = async (memberList: Member[]) => {
+    // Kick
+    const withKick = memberList.filter(m => m.kick_channel?.trim());
+    const kickInit: Record<string, LiveStatus> = {};
+    withKick.forEach(m => { kickInit[m.id] = { isLive: false, loading: true }; });
+    setKickStatuses(kickInit);
+    await Promise.all(withKick.map(async (m) => {
+      try {
+        const channel = m.kick_channel.trim().replace('https://kick.com/', '').replace('kick.com/', '');
+        const res = await fetch(`https://kick.com/api/v2/channels/${channel}`);
+        const data = await res.json();
+        setKickStatuses(prev => ({ ...prev, [m.id]: { isLive: data.livestream?.is_live === true, loading: false } }));
+      } catch {
+        setKickStatuses(prev => ({ ...prev, [m.id]: { isLive: false, loading: false } }));
+      }
+    }));
 
-// MISSIONS
-app.get('/missions', async (_, res) => { const r = await pool.query('SELECT * FROM missions ORDER BY scheduled_date ASC'); res.json(r.rows); });
-app.post('/missions', async (req, res) => { const { title, description = '', scheduled_date, status = 'pending' } = req.body; if (!title) return res.status(400).json({ error: 'title obrigatório' }); const id = uuid(); await pool.query('INSERT INTO missions (id,title,description,scheduled_date,status) VALUES ($1,$2,$3,$4,$5)', [id, title, description, scheduled_date, status]); const r = await pool.query('SELECT * FROM missions WHERE id=$1', [id]); res.json(r.rows[0]); });
-app.patch('/missions/:id', async (req, res) => { const { status } = req.body; const completed_at = status === 'completed' ? now() : null; await pool.query('UPDATE missions SET status=$1, completed_at=$2 WHERE id=$3', [status, completed_at, req.params.id]); const r = await pool.query('SELECT * FROM missions WHERE id=$1', [req.params.id]); res.json(r.rows[0]); });
-app.delete('/missions/:id', async (req, res) => { await pool.query('DELETE FROM missions WHERE id=$1', [req.params.id]); res.json({ success: true }); });
+    // Twitch
+    const withTwitch = memberList.filter(m => m.twitch_channel?.trim());
+    const twitchInit: Record<string, LiveStatus> = {};
+    withTwitch.forEach(m => { twitchInit[m.id] = { isLive: false, loading: true }; });
+    setTwitchStatuses(twitchInit);
+    await Promise.all(withTwitch.map(async (m) => {
+      try {
+        const channel = m.twitch_channel.trim().replace('https://twitch.tv/', '').replace('twitch.tv/', '');
+        const res = await fetch(`${BASE}/twitch-status/${channel}`);
+        const data = await res.json();
+        setTwitchStatuses(prev => ({ ...prev, [m.id]: { isLive: data.isLive, loading: false } }));
+      } catch {
+        setTwitchStatuses(prev => ({ ...prev, [m.id]: { isLive: false, loading: false } }));
+      }
+    }));
+  };
 
-// NOTES
-app.get('/notes', async (_, res) => { const r = await pool.query('SELECT * FROM notes ORDER BY updated_at DESC'); res.json(r.rows); });
-app.post('/notes', async (req, res) => { const { content } = req.body; if (!content) return res.status(400).json({ error: 'content obrigatório' }); const id = uuid(); await pool.query('INSERT INTO notes (id,content) VALUES ($1,$2)', [id, content]); const r = await pool.query('SELECT * FROM notes WHERE id=$1', [id]); res.json(r.rows[0]); });
-app.patch('/notes/:id', async (req, res) => { const { content } = req.body; await pool.query('UPDATE notes SET content=$1, updated_at=$2 WHERE id=$3', [content, now(), req.params.id]); const r = await pool.query('SELECT * FROM notes WHERE id=$1', [req.params.id]); res.json(r.rows[0]); });
-app.delete('/notes/:id', async (req, res) => { await pool.query('DELETE FROM notes WHERE id=$1', [req.params.id]); res.json({ success: true }); });
+  const isOnline = (m: Member) => kickStatuses[m.id]?.isLive || twitchStatuses[m.id]?.isLive;
 
-// PURCHASES
-app.get('/purchases', async (_, res) => { const r = await pool.query('SELECT * FROM purchases ORDER BY created_at DESC'); res.json(r.rows); });
-app.post('/purchases', async (req, res) => { const { item, quantity, price, status = 'pending' } = req.body; if (!item) return res.status(400).json({ error: 'item obrigatório' }); const id = uuid(); await pool.query('INSERT INTO purchases (id,item,quantity,price,status) VALUES ($1,$2,$3,$4,$5)', [id, item, quantity, price, status]); const r = await pool.query('SELECT * FROM purchases WHERE id=$1', [id]); res.json(r.rows[0]); });
-app.patch('/purchases/:id', async (req, res) => { const { status } = req.body; await pool.query('UPDATE purchases SET status=$1 WHERE id=$2', [status, req.params.id]); const r = await pool.query('SELECT * FROM purchases WHERE id=$1', [req.params.id]); res.json(r.rows[0]); });
-app.delete('/purchases/:id', async (req, res) => { await pool.query('DELETE FROM purchases WHERE id=$1', [req.params.id]); res.json({ success: true }); });
+  const addMember = async () => {
+    if (!newMember.name.trim()) return;
+    await api.addMember(newMember);
+    setNewMember({ name: '', role: 'Recruta', kick_channel: '', twitch_channel: '', joined_at: '', status: 'active' });
+    setIsAdding(false);
+    fetchMembers();
+  };
 
-// SALES
-app.get('/sales', async (_, res) => { const r = await pool.query('SELECT * FROM sales ORDER BY created_at DESC'); res.json(r.rows); });
-app.post('/sales', async (req, res) => { const { item, quantity, price, buyer = '' } = req.body; if (!item) return res.status(400).json({ error: 'item obrigatório' }); const id = uuid(); await pool.query('INSERT INTO sales (id,item,quantity,price,buyer) VALUES ($1,$2,$3,$4,$5)', [id, item, quantity, price, buyer]); const r = await pool.query('SELECT * FROM sales WHERE id=$1', [id]); res.json(r.rows[0]); });
-app.delete('/sales/:id', async (req, res) => { await pool.query('DELETE FROM sales WHERE id=$1', [req.params.id]); res.json({ success: true }); });
+  const updateMember = async (id: string) => {
+    await api.updateMember(id, editData);
+    setEditingId(null);
+    fetchMembers();
+  };
 
-// DELIVERIES
-app.get('/deliveries', async (_, res) => { const r = await pool.query('SELECT * FROM deliveries ORDER BY created_at DESC'); res.json(r.rows); });
-app.post('/deliveries', async (req, res) => { const { description, recipient, status = 'pending' } = req.body; if (!description || !recipient) return res.status(400).json({ error: 'obrigatórios' }); const id = uuid(); await pool.query('INSERT INTO deliveries (id,description,recipient,status) VALUES ($1,$2,$3,$4)', [id, description, recipient, status]); const r = await pool.query('SELECT * FROM deliveries WHERE id=$1', [id]); res.json(r.rows[0]); });
-app.patch('/deliveries/:id', async (req, res) => { const { status } = req.body; const completed_at = status === 'completed' ? now() : null; await pool.query('UPDATE deliveries SET status=$1, completed_at=$2 WHERE id=$3', [status, completed_at, req.params.id]); const r = await pool.query('SELECT * FROM deliveries WHERE id=$1', [req.params.id]); res.json(r.rows[0]); });
-app.delete('/deliveries/:id', async (req, res) => { await pool.query('DELETE FROM deliveries WHERE id=$1', [req.params.id]); res.json({ success: true }); });
+  const deleteMember = async (id: string) => { await api.deleteMember(id); fetchMembers(); };
+  const startEdit = (m: Member) => { setEditingId(m.id); setEditData({ name: m.name, role: m.role, kick_channel: m.kick_channel || '', twitch_channel: m.twitch_channel || '', joined_at: m.joined_at || '', status: m.status }); };
 
-// MEMBERS
-app.get('/members', async (_, res) => { const r = await pool.query('SELECT * FROM members ORDER BY created_at DESC'); res.json(r.rows); });
-app.post('/members', async (req, res) => { const { name, role = 'Recruta', kick_channel = '', avatar_url = '', joined_at = '', status = 'active' } = req.body; if (!name) return res.status(400).json({ error: 'name obrigatório' }); const id = uuid(); await pool.query('INSERT INTO members (id,name,role,kick_channel,avatar_url,joined_at,status) VALUES ($1,$2,$3,$4,$5,$6,$7)', [id, name, role, kick_channel, avatar_url, joined_at, status]); const r = await pool.query('SELECT * FROM members WHERE id=$1', [id]); res.json(r.rows[0]); });
-app.patch('/members/:id', async (req, res) => { const { name, role, kick_channel, avatar_url, joined_at, status } = req.body; await pool.query('UPDATE members SET name=$1, role=$2, kick_channel=$3, avatar_url=$4, joined_at=$5, status=$6 WHERE id=$7', [name, role, kick_channel ?? '', avatar_url ?? '', joined_at ?? '', status, req.params.id]); const r = await pool.query('SELECT * FROM members WHERE id=$1', [req.params.id]); res.json(r.rows[0]); });
-app.delete('/members/:id', async (req, res) => { await pool.query('DELETE FROM members WHERE id=$1', [req.params.id]); res.json({ success: true }); });
+  const active = members.filter(m => m.status === 'active');
+  const kickLive = Object.values(kickStatuses).filter(s => s.isLive).length;
+  const twitchLive = Object.values(twitchStatuses).filter(s => s.isLive).length;
+  const liveCount = members.filter(m => isOnline(m)).length;
 
-// TRANSACTIONS
-app.get('/transactions', async (_, res) => { const r = await pool.query('SELECT * FROM transactions ORDER BY created_at DESC'); res.json(r.rows); });
-app.post('/transactions', async (req, res) => { const { type, description, amount } = req.body; if (!type || !description || !amount) return res.status(400).json({ error: 'obrigatórios' }); const id = uuid(); await pool.query('INSERT INTO transactions (id,type,description,amount) VALUES ($1,$2,$3,$4)', [id, type, description, amount]); const r = await pool.query('SELECT * FROM transactions WHERE id=$1', [id]); res.json(r.rows[0]); });
-app.delete('/transactions/:id', async (req, res) => { await pool.query('DELETE FROM transactions WHERE id=$1', [req.params.id]); res.json({ success: true }); });
+  const sortedMembers = [...members].sort((a, b) => {
+    const aLive = isOnline(a) ? 1 : 0;
+    const bLive = isOnline(b) ? 1 : 0;
+    return bLive - aLive;
+  });
 
-// STOCK
-app.get('/stock', async (_, res) => { const r = await pool.query('SELECT * FROM stock ORDER BY category ASC, name ASC'); res.json(r.rows); });
-app.post('/stock', async (req, res) => { const { name, quantity, category = 'Item' } = req.body; if (!name || !quantity) return res.status(400).json({ error: 'name e quantity obrigatórios' }); const id = uuid(); await pool.query('INSERT INTO stock (id,name,quantity,category) VALUES ($1,$2,$3,$4)', [id, name, quantity, category]); const r = await pool.query('SELECT * FROM stock WHERE id=$1', [id]); res.json(r.rows[0]); });
-app.patch('/stock/:id', async (req, res) => { const { name, quantity, category } = req.body; await pool.query('UPDATE stock SET name=$1, quantity=$2, category=$3 WHERE id=$4', [name, quantity, category, req.params.id]); const r = await pool.query('SELECT * FROM stock WHERE id=$1', [req.params.id]); res.json(r.rows[0]); });
-app.delete('/stock/:id', async (req, res) => { await pool.query('DELETE FROM stock WHERE id=$1', [req.params.id]); res.json({ success: true }); });
+  const filteredMembers = sortedMembers.filter(m => {
+    if (filter === 'online') return isOnline(m);
+    if (filter === 'offline') return !isOnline(m);
+    return true;
+  });
 
-// GOALS
-app.get('/goals', async (_, res) => { const r = await pool.query('SELECT * FROM goals ORDER BY created_at DESC'); res.json(r.rows); });
-app.post('/goals', async (req, res) => { const { member_id, title, target, current = 0, unit = '', type = 'free', deadline = '' } = req.body; if (!member_id || !title || !target) return res.status(400).json({ error: 'member_id, title e target obrigatórios' }); const id = uuid(); await pool.query('INSERT INTO goals (id,member_id,title,target,current,unit,type,deadline) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)', [id, member_id, title, target, current, unit, type, deadline]); const r = await pool.query('SELECT * FROM goals WHERE id=$1', [id]); res.json(r.rows[0]); });
-app.patch('/goals/:id', async (req, res) => { const { current, status } = req.body; if (status !== undefined) { await pool.query('UPDATE goals SET status=$1 WHERE id=$2', [status, req.params.id]); } else { await pool.query('UPDATE goals SET current=$1 WHERE id=$2', [current, req.params.id]); } const r = await pool.query('SELECT * FROM goals WHERE id=$1', [req.params.id]); res.json(r.rows[0]); });
-app.delete('/goals/:id', async (req, res) => { await pool.query('DELETE FROM goals WHERE id=$1', [req.params.id]); res.json({ success: true }); });
+  const renderStatus = (m: Member) => {
+    const kick = kickStatuses[m.id];
+    const twitch = twitchStatuses[m.id];
+    const loading = kick?.loading || twitch?.loading;
+    if (loading) return <span className="flex items-center gap-1 text-gray-500 text-xs"><div className="w-2 h-2 rounded-full bg-gray-500 animate-pulse"></div> ...</span>;
+    if (kick?.isLive) return <span className="flex items-center gap-1 text-green-400 text-xs font-semibold"><Wifi size={12} /> Kick Live</span>;
+    if (twitch?.isLive) return <span className="flex items-center gap-1 text-purple-400 text-xs font-semibold"><Wifi size={12} /> Twitch Live</span>;
+    if (m.kick_channel || m.twitch_channel) return <span className="flex items-center gap-1 text-gray-500 text-xs"><WifiOff size={12} /> Offline</span>;
+    return <span className="text-gray-600 text-xs">—</span>;
+  };
 
-// RESET GOALS (temporário)
-app.get('/reset-goals', async (_, res) => {
-  await pool.query('DROP TABLE IF EXISTS goals');
-  await pool.query(`CREATE TABLE goals (
-    id TEXT PRIMARY KEY, member_id TEXT NOT NULL, title TEXT NOT NULL,
-    target INTEGER NOT NULL, current INTEGER DEFAULT 0, unit TEXT DEFAULT '',
-    type TEXT DEFAULT 'free', deadline TEXT DEFAULT '',
-    status TEXT DEFAULT 'active', created_at TIMESTAMPTZ DEFAULT NOW()
-  )`);
-  res.json({ success: true });
-});
+  return (
+    <div className="space-y-6">
+      {selectedMember && (
+        <MemberModal
+          member={selectedMember}
+          kickStatus={kickStatuses[selectedMember.id]}
+          twitchStatus={twitchStatuses[selectedMember.id]}
+          onClose={() => setSelectedMember(null)}
+        />
+      )}
 
-// KICK STATUS
-app.get('/kick-status/:channel', async (req, res) => {
-  try {
-    const r = await fetch(`https://kick.com/api/v2/channels/${req.params.channel}`, {
-      headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
-    });
-    if (!r.ok) return res.status(502).json({ error: 'Canal não encontrado' });
-    const data = await r.json();
-    const isLive = data.livestream?.is_live === true;
-    const viewers = data.livestream?.viewer_count || 0;
-    res.json({ isLive, viewers });
-  } catch {
-    res.status(502).json({ error: 'Erro ao consultar Kick' });
-  }
-});
+      <div className="flex items-center justify-between">
+        <div><h2 className="text-3xl font-bold text-white">Membros</h2><p className="text-gray-400 mt-1">Gerencie os membros da facção</p></div>
+        <div className="flex gap-3">
+          <button onClick={() => fetchAllStatuses(members)} className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg transition-colors"><RefreshCw size={16} /></button>
+          <button onClick={() => setIsAdding(!isAdding)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"><Plus size={20} /> Novo Membro</button>
+        </div>
+      </div>
 
-// MIGRATE
-app.get('/migrate', async (_, res) => {
-  try {
-    await pool.query(`
-      ALTER TABLE goals
-      ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'free',
-      ADD COLUMN IF NOT EXISTS deadline TEXT DEFAULT '',
-      ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
-    `);
-    res.json({ success: true, message: 'Migração concluída!' });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg p-5 text-white"><div className="flex items-center justify-between mb-2"><p className="text-blue-100 text-sm">Total</p><Users size={20} className="text-blue-200" /></div><p className="text-3xl font-bold">{members.length}</p></div>
+        <div className="bg-gradient-to-br from-green-600 to-green-700 rounded-lg p-5 text-white"><p className="text-green-100 text-sm mb-2">Ativos</p><p className="text-3xl font-bold">{active.length}</p></div>
+        <div className="bg-gradient-to-br from-gray-600 to-gray-700 rounded-lg p-5 text-white"><p className="text-gray-100 text-sm mb-2">Inativos</p><p className="text-3xl font-bold">{members.length - active.length}</p></div>
+        <div className="bg-gradient-to-br from-red-600 to-red-700 rounded-lg p-5 text-white"><div className="flex items-center justify-between mb-2"><p className="text-red-100 text-sm">Ao Vivo</p><Wifi size={20} className="text-red-200 animate-pulse" /></div><p className="text-3xl font-bold">{liveCount}</p></div>
+      </div>
 
-// TWITCH STATUS — adicionar antes de "app.get('/health'...)"
-// Coloca as credenciais como variáveis de ambiente no Render:
-// TWITCH_CLIENT_ID=x4csw5gb3s94qhxjs62zy7v6j9q7v8
-// TWITCH_CLIENT_SECRET=rnqjra5e3wpi7ywp7sb1gyuu0o7o02
+      <div className="flex items-center gap-3">
+        <span className="text-gray-400 text-sm font-semibold">Filtrar:</span>
+        <button onClick={() => setFilter('all')} className={`px-4 py-2 rounded-lg text-sm transition-colors ${filter === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>Todos ({members.length})</button>
+        <button onClick={() => setFilter('online')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${filter === 'online' ? 'bg-green-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}><Wifi size={14} /> Online ({liveCount})</button>
+        <button onClick={() => setFilter('offline')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${filter === 'offline' ? 'bg-gray-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}><WifiOff size={14} /> Offline ({members.length - liveCount})</button>
+      </div>
 
-let twitchToken = null;
-let twitchTokenExpiry = 0;
+      {isAdding && (
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-white mb-4">Adicionar Membro</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <input type="text" placeholder="Nome do membro" value={newMember.name} onChange={(e) => setNewMember({ ...newMember, name: e.target.value })} className="bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500" />
+            <select value={newMember.role} onChange={(e) => setNewMember({ ...newMember, role: e.target.value })} className="bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500">
+              {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">Canal do Kick</label>
+              <input type="text" placeholder="ex: ovotz" value={newMember.kick_channel} onChange={(e) => setNewMember({ ...newMember, kick_channel: e.target.value })} className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">Canal da Twitch</label>
+              <input type="text" placeholder="ex: neymarjr" value={newMember.twitch_channel} onChange={(e) => setNewMember({ ...newMember, twitch_channel: e.target.value })} className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">Data de entrada</label>
+              <input type="date" value={newMember.joined_at} onChange={(e) => setNewMember({ ...newMember, joined_at: e.target.value })} className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500 [color-scheme:dark]" />
+            </div>
+            <div className="flex gap-3 items-end">
+              <button onClick={addMember} className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors">Adicionar</button>
+              <button onClick={() => setIsAdding(false)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
-async function getTwitchToken() {
-  if (twitchToken && Date.now() < twitchTokenExpiry) return twitchToken;
-  const clientId = process.env.TWITCH_CLIENT_ID || 'x4csw5gb3s94qhxjs62zy7v6j9q7v8';
-  const clientSecret = process.env.TWITCH_CLIENT_SECRET || 'rnqjra5e3wpi7ywp7sb1gyuu0o7o02';
-  const r = await fetch(`https://id.twitch.tv/oauth2/token?client_id=${clientId}&client_secret=${clientSecret}&grant_type=client_credentials`, { method: 'POST' });
-  const data = await r.json();
-  twitchToken = data.access_token;
-  twitchTokenExpiry = Date.now() + (data.expires_in - 60) * 1000;
-  return twitchToken;
+      <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
+        <table className="w-full">
+          <thead className="bg-gray-900">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs text-gray-400 uppercase">Status</th>
+              <th className="px-6 py-3 text-left text-xs text-gray-400 uppercase">Nome</th>
+              <th className="px-6 py-3 text-left text-xs text-gray-400 uppercase">Cargo</th>
+              <th className="px-6 py-3 text-left text-xs text-gray-400 uppercase">Kick / Twitch</th>
+              <th className="px-6 py-3 text-left text-xs text-gray-400 uppercase">Situação</th>
+              <th className="px-6 py-3 text-right text-xs text-gray-400 uppercase">Ações</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-700">
+            {filteredMembers.map(m => (
+              <tr key={m.id} onClick={() => editingId !== m.id && setSelectedMember(m)} className={`cursor-pointer hover:bg-gray-700/50 transition-colors ${isOnline(m) ? 'bg-green-500/5' : ''}`}>
+                <td className="px-6 py-4">{renderStatus(m)}</td>
+                <td className="px-6 py-4">{editingId === m.id ? <input value={editData.name} onChange={(e) => setEditData({ ...editData, name: e.target.value })} className="bg-gray-900 border border-gray-700 rounded px-3 py-1 text-white w-full" onClick={e => e.stopPropagation()} /> : <span className="text-white font-medium">{m.name}</span>}</td>
+                <td className="px-6 py-4">{editingId === m.id ? <select value={editData.role} onChange={(e) => setEditData({ ...editData, role: e.target.value })} className="bg-gray-900 border border-gray-700 rounded px-3 py-1 text-white" onClick={e => e.stopPropagation()}>{ROLES.map(r => <option key={r} value={r}>{r}</option>)}</select> : <span className="text-gray-300">{m.role}</span>}</td>
+                <td className="px-6 py-4">
+                  {editingId === m.id ? (
+                    <div className="flex gap-2" onClick={e => e.stopPropagation()}>
+                      <input value={editData.kick_channel} onChange={(e) => setEditData({ ...editData, kick_channel: e.target.value })} placeholder="kick" className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-white text-sm w-24" />
+                      <input value={editData.twitch_channel} onChange={(e) => setEditData({ ...editData, twitch_channel: e.target.value })} placeholder="twitch" className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-white text-sm w-24" />
+                    </div>
+                  ) : (
+                    <div className="flex gap-2 text-xs text-gray-400">
+                      {m.kick_channel && <span className="text-green-400">K: {m.kick_channel}</span>}
+                      {m.twitch_channel && <span className="text-purple-400">T: {m.twitch_channel}</span>}
+                      {!m.kick_channel && !m.twitch_channel && '—'}
+                    </div>
+                  )}
+                </td>
+                <td className="px-6 py-4">{editingId === m.id ? <select value={editData.status} onChange={(e) => setEditData({ ...editData, status: e.target.value as any })} className="bg-gray-900 border border-gray-700 rounded px-3 py-1 text-white" onClick={e => e.stopPropagation()}><option value="active">Ativo</option><option value="inactive">Inativo</option></select> : <span className={`px-3 py-1 rounded-full text-xs font-semibold ${m.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}`}>{m.status === 'active' ? 'Ativo' : 'Inativo'}</span>}</td>
+                <td className="px-6 py-4 text-right" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-end gap-2">
+                    {editingId === m.id ? <button onClick={() => updateMember(m.id)} className="text-green-400 hover:text-green-300"><Save size={18} /></button> : <button onClick={() => startEdit(m)} className="text-gray-400 hover:text-blue-400"><Edit2 size={18} /></button>}
+                    <button onClick={() => deleteMember(m.id)} className="text-gray-400 hover:text-red-400"><Trash2 size={18} /></button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {filteredMembers.length === 0 && <div className="text-center py-12"><p className="text-gray-500">Nenhum membro encontrado</p></div>}
+      </div>
+    </div>
+  );
 }
-
-app.get('/twitch-status/:channel', async (req, res) => {
-  try {
-    const clientId = process.env.TWITCH_CLIENT_ID || 'x4csw5gb3s94qhxjs62zy7v6j9q7v8';
-    const token = await getTwitchToken();
-    const r = await fetch(`https://api.twitch.tv/helix/streams?user_login=${req.params.channel}`, {
-      headers: { 'Client-ID': clientId, 'Authorization': `Bearer ${token}` }
-    });
-    if (!r.ok) return res.status(502).json({ error: 'Erro ao consultar Twitch' });
-    const data = await r.json();
-    const stream = data.data?.[0];
-    const isLive = !!stream;
-    const viewers = stream?.viewer_count || 0;
-    res.json({ isLive, viewers });
-  } catch {
-    res.status(502).json({ error: 'Erro ao consultar Twitch' });
-  }
-});
-
-app.get('/health', (_, res) => res.json({ status: 'ok' }));
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Backend rodando na porta ${PORT}`));
