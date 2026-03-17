@@ -16,18 +16,14 @@ const allowedOrigins = [
   'https://diegoww12a.github.io',
   'https://franca-dashboard.netlify.app',
   'https://francagestao.netlify.app',
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'http://localhost:3000',
+  'http://localhost:5173'
 ];
 
 app.use(cors({
   origin(origin, cb) {
     if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-    if (origin && origin.startsWith('http://localhost')) return cb(null, true);
     cb(new Error('CORS: origem não permitida'));
-  },
-  credentials: true,
+  }
 }));
 
 app.use(express.json());
@@ -61,7 +57,7 @@ async function initDB() {
     );
     CREATE TABLE IF NOT EXISTS members (
       id TEXT PRIMARY KEY, name TEXT NOT NULL, role TEXT DEFAULT 'Recruta',
-      kick_channel TEXT DEFAULT '', avatar_url TEXT DEFAULT '',
+      kick_channel TEXT DEFAULT '', twitch_channel TEXT DEFAULT '',
       joined_at TEXT DEFAULT '', status TEXT DEFAULT 'active',
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
@@ -80,6 +76,8 @@ async function initDB() {
       status TEXT DEFAULT 'active', created_at TIMESTAMPTZ DEFAULT NOW()
     );
   `);
+  // Adiciona coluna twitch_channel se não existir
+  await pool.query(`ALTER TABLE members ADD COLUMN IF NOT EXISTS twitch_channel TEXT DEFAULT ''`);
   console.log('Banco de dados inicializado!');
 }
 
@@ -89,6 +87,7 @@ const PASSWORD_HASH = process.env.PASSWORD_HASH || '$2b$10$bn7SVyBy3fULDf7jK4wc.
 const uuid = () => randomUUID();
 const now = () => new Date().toISOString();
 
+// AUTH
 app.post('/login', async (req, res) => {
   const { password } = req.body;
   if (!password) return res.status(400).json({ error: 'Senha obrigatória' });
@@ -134,8 +133,8 @@ app.delete('/deliveries/:id', async (req, res) => { await pool.query('DELETE FRO
 
 // MEMBERS
 app.get('/members', async (_, res) => { const r = await pool.query('SELECT * FROM members ORDER BY created_at DESC'); res.json(r.rows); });
-app.post('/members', async (req, res) => { const { name, role = 'Recruta', kick_channel = '', avatar_url = '', joined_at = '', status = 'active' } = req.body; if (!name) return res.status(400).json({ error: 'name obrigatório' }); const id = uuid(); await pool.query('INSERT INTO members (id,name,role,kick_channel,avatar_url,joined_at,status) VALUES ($1,$2,$3,$4,$5,$6,$7)', [id, name, role, kick_channel, avatar_url, joined_at, status]); const r = await pool.query('SELECT * FROM members WHERE id=$1', [id]); res.json(r.rows[0]); });
-app.patch('/members/:id', async (req, res) => { const { name, role, kick_channel, avatar_url, joined_at, status } = req.body; await pool.query('UPDATE members SET name=$1, role=$2, kick_channel=$3, avatar_url=$4, joined_at=$5, status=$6 WHERE id=$7', [name, role, kick_channel ?? '', avatar_url ?? '', joined_at ?? '', status, req.params.id]); const r = await pool.query('SELECT * FROM members WHERE id=$1', [req.params.id]); res.json(r.rows[0]); });
+app.post('/members', async (req, res) => { const { name, role = 'Recruta', kick_channel = '', twitch_channel = '', joined_at = '', status = 'active' } = req.body; if (!name) return res.status(400).json({ error: 'name obrigatório' }); const id = uuid(); await pool.query('INSERT INTO members (id,name,role,kick_channel,twitch_channel,joined_at,status) VALUES ($1,$2,$3,$4,$5,$6,$7)', [id, name, role, kick_channel, twitch_channel, joined_at, status]); const r = await pool.query('SELECT * FROM members WHERE id=$1', [id]); res.json(r.rows[0]); });
+app.patch('/members/:id', async (req, res) => { const { name, role, kick_channel, twitch_channel, joined_at, status } = req.body; await pool.query('UPDATE members SET name=$1, role=$2, kick_channel=$3, twitch_channel=$4, joined_at=$5, status=$6 WHERE id=$7', [name, role, kick_channel ?? '', twitch_channel ?? '', joined_at ?? '', status, req.params.id]); const r = await pool.query('SELECT * FROM members WHERE id=$1', [req.params.id]); res.json(r.rows[0]); });
 app.delete('/members/:id', async (req, res) => { await pool.query('DELETE FROM members WHERE id=$1', [req.params.id]); res.json({ success: true }); });
 
 // TRANSACTIONS
@@ -145,26 +144,45 @@ app.delete('/transactions/:id', async (req, res) => { await pool.query('DELETE F
 
 // STOCK
 app.get('/stock', async (_, res) => { const r = await pool.query('SELECT * FROM stock ORDER BY category ASC, name ASC'); res.json(r.rows); });
-app.post('/stock', async (req, res) => { const { name, quantity, category = 'Item' } = req.body; if (!name || !quantity) return res.status(400).json({ error: 'name e quantity obrigatórios' }); const id = uuid(); await pool.query('INSERT INTO stock (id,name,quantity,category) VALUES ($1,$2,$3,$4)', [id, name, quantity, category]); const r = await pool.query('SELECT * FROM stock WHERE id=$1', [id]); res.json(r.rows[0]); });
+app.post('/stock', async (req, res) => { const { name, quantity, category = 'Item' } = req.body; if (!name || !quantity) return res.status(400).json({ error: 'obrigatórios' }); const id = uuid(); await pool.query('INSERT INTO stock (id,name,quantity,category) VALUES ($1,$2,$3,$4)', [id, name, quantity, category]); const r = await pool.query('SELECT * FROM stock WHERE id=$1', [id]); res.json(r.rows[0]); });
 app.patch('/stock/:id', async (req, res) => { const { name, quantity, category } = req.body; await pool.query('UPDATE stock SET name=$1, quantity=$2, category=$3 WHERE id=$4', [name, quantity, category, req.params.id]); const r = await pool.query('SELECT * FROM stock WHERE id=$1', [req.params.id]); res.json(r.rows[0]); });
 app.delete('/stock/:id', async (req, res) => { await pool.query('DELETE FROM stock WHERE id=$1', [req.params.id]); res.json({ success: true }); });
 
 // GOALS
 app.get('/goals', async (_, res) => { const r = await pool.query('SELECT * FROM goals ORDER BY created_at DESC'); res.json(r.rows); });
-app.post('/goals', async (req, res) => { const { member_id, title, target, current = 0, unit = '', type = 'free', deadline = '' } = req.body; if (!member_id || !title || !target) return res.status(400).json({ error: 'member_id, title e target obrigatórios' }); const id = uuid(); await pool.query('INSERT INTO goals (id,member_id,title,target,current,unit,type,deadline) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)', [id, member_id, title, target, current, unit, type, deadline]); const r = await pool.query('SELECT * FROM goals WHERE id=$1', [id]); res.json(r.rows[0]); });
+app.post('/goals', async (req, res) => { const { member_id, title, target, current = 0, unit = '', type = 'free', deadline = '' } = req.body; if (!member_id || !title || !target) return res.status(400).json({ error: 'obrigatórios' }); const id = uuid(); await pool.query('INSERT INTO goals (id,member_id,title,target,current,unit,type,deadline) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)', [id, member_id, title, target, current, unit, type, deadline]); const r = await pool.query('SELECT * FROM goals WHERE id=$1', [id]); res.json(r.rows[0]); });
 app.patch('/goals/:id', async (req, res) => { const { current, status } = req.body; if (status !== undefined) { await pool.query('UPDATE goals SET status=$1 WHERE id=$2', [status, req.params.id]); } else { await pool.query('UPDATE goals SET current=$1 WHERE id=$2', [current, req.params.id]); } const r = await pool.query('SELECT * FROM goals WHERE id=$1', [req.params.id]); res.json(r.rows[0]); });
 app.delete('/goals/:id', async (req, res) => { await pool.query('DELETE FROM goals WHERE id=$1', [req.params.id]); res.json({ success: true }); });
 
-// RESET GOALS (temporário)
-app.get('/reset-goals', async (_, res) => {
-  await pool.query('DROP TABLE IF EXISTS goals');
-  await pool.query(`CREATE TABLE goals (
-    id TEXT PRIMARY KEY, member_id TEXT NOT NULL, title TEXT NOT NULL,
-    target INTEGER NOT NULL, current INTEGER DEFAULT 0, unit TEXT DEFAULT '',
-    type TEXT DEFAULT 'free', deadline TEXT DEFAULT '',
-    status TEXT DEFAULT 'active', created_at TIMESTAMPTZ DEFAULT NOW()
-  )`);
-  res.json({ success: true });
+// TWITCH TOKEN
+let twitchToken = null;
+let twitchTokenExpiry = 0;
+async function getTwitchToken() {
+  if (twitchToken && Date.now() < twitchTokenExpiry) return twitchToken;
+  const clientId = process.env.TWITCH_CLIENT_ID || 'x4csw5gb3s94qhxjs62zy7v6j9q7v8';
+  const clientSecret = process.env.TWITCH_CLIENT_SECRET || 'rnqjra5e3wpi7ywp7sb1gyuu0o7o02';
+  const r = await fetch(`https://id.twitch.tv/oauth2/token?client_id=${clientId}&client_secret=${clientSecret}&grant_type=client_credentials`, { method: 'POST' });
+  const data = await r.json();
+  twitchToken = data.access_token;
+  twitchTokenExpiry = Date.now() + (data.expires_in - 60) * 1000;
+  return twitchToken;
+}
+
+// TWITCH STATUS
+app.get('/twitch-status/:channel', async (req, res) => {
+  try {
+    const clientId = process.env.TWITCH_CLIENT_ID || 'x4csw5gb3s94qhxjs62zy7v6j9q7v8';
+    const token = await getTwitchToken();
+    const r = await fetch(`https://api.twitch.tv/helix/streams?user_login=${req.params.channel}`, {
+      headers: { 'Client-ID': clientId, 'Authorization': `Bearer ${token}` }
+    });
+    if (!r.ok) return res.status(502).json({ error: 'Erro ao consultar Twitch' });
+    const data = await r.json();
+    const stream = data.data?.[0];
+    res.json({ isLive: !!stream, viewers: stream?.viewer_count || 0 });
+  } catch {
+    res.status(502).json({ error: 'Erro ao consultar Twitch' });
+  }
 });
 
 // KICK STATUS
@@ -175,27 +193,22 @@ app.get('/kick-status/:channel', async (req, res) => {
     });
     if (!r.ok) return res.status(502).json({ error: 'Canal não encontrado' });
     const data = await r.json();
-    const isLive = data.livestream?.is_live === true;
-    const viewers = data.livestream?.viewer_count || 0;
-    res.json({ isLive, viewers });
+    res.json({ isLive: data.livestream?.is_live === true, viewers: data.livestream?.viewer_count || 0 });
   } catch {
     res.status(502).json({ error: 'Erro ao consultar Kick' });
   }
 });
 
-// MIGRATE
-app.get('/migrate', async (_, res) => {
-  try {
-    await pool.query(`
-      ALTER TABLE goals
-      ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'free',
-      ADD COLUMN IF NOT EXISTS deadline TEXT DEFAULT '',
-      ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
-    `);
-    res.json({ success: true, message: 'Migração concluída!' });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
+// RESET GOALS
+app.get('/reset-goals', async (_, res) => {
+  await pool.query('DROP TABLE IF EXISTS goals');
+  await pool.query(`CREATE TABLE goals (
+    id TEXT PRIMARY KEY, member_id TEXT NOT NULL, title TEXT NOT NULL,
+    target INTEGER NOT NULL, current INTEGER DEFAULT 0, unit TEXT DEFAULT '',
+    type TEXT DEFAULT 'free', deadline TEXT DEFAULT '',
+    status TEXT DEFAULT 'active', created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  res.json({ success: true });
 });
 
 app.get('/health', (_, res) => res.json({ status: 'ok' }));
