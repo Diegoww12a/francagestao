@@ -167,6 +167,17 @@ app.get('/kick-status/:channel', async (req, res) => {
   }
 });
 
+app.get('/reset-goals', async (_, res) => {
+  await pool.query('DROP TABLE IF EXISTS goals');
+  await pool.query(`CREATE TABLE goals (
+    id TEXT PRIMARY KEY, member_id TEXT NOT NULL, title TEXT NOT NULL,
+    target INTEGER NOT NULL, current INTEGER DEFAULT 0,
+    unit TEXT DEFAULT '', status TEXT DEFAULT 'active',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  res.json({ success: true });
+});
+
 app.get('/health', (_, res) => res.json({ status: 'ok' }));
 
 const PORT = process.env.PORT || 3000;
