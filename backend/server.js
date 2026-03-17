@@ -16,14 +16,18 @@ const allowedOrigins = [
   'https://diegoww12a.github.io',
   'https://franca-dashboard.netlify.app',
   'https://francagestao.netlify.app',
-  'http://localhost:5173'
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:3000',
 ];
 
 app.use(cors({
   origin(origin, cb) {
     if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    if (origin && origin.startsWith('http://localhost')) return cb(null, true);
     cb(new Error('CORS: origem não permitida'));
-  }
+  },
+  credentials: true,
 }));
 
 app.use(express.json());
