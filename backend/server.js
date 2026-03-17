@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import bcrypt from 'bcrypt';
@@ -8,7 +9,7 @@ const app = express();
 const { Pool } = pg;
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://francagestao_db_user:LSGPLhjLaqNCPmMFo21GP28gQcmpYdhO@dpg-d6s7drua2pns73dhioo0-a/francagestao_db',
+  connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
@@ -32,21 +33,55 @@ app.use(cors({
 
 app.use(express.json());
 
-const PASSWORD_HASH = process.env.PASSWORD_HASH || '$2b$10$bn7SVyBy3fULDf7jK4wc.uTRO4XDDtXaJ6qDzqO5yhrG6PNueiJvK';
+const PASSWORD_HASH = process.env.PASSWORD_HASH;
 const uuid = () => randomUUID();
 const now = () => new Date().toISOString();
 
+
+// =========================
+// 🔐 LOGIN
+// =========================
 app.post('/login', async (req, res) => {
   const { password } = req.body;
   if (!password) return res.status(400).json({ error: 'Senha obrigatória' });
+
   const ok = await bcrypt.compare(password.trim(), PASSWORD_HASH);
   if (!ok) return res.status(401).json({ error: 'Senha incorreta' });
+
   res.json({ success: true });
 });
 
 
 // =========================
-// 🔥 KICK STATUS (já tinha)
+// 📋 TASKS
+// =========================
+app.get('/tasks', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM tasks ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao buscar tasks' });
+  }
+});
+
+
+// =========================
+// 👥 MEMBERS
+// =========================
+app.get('/members', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM members ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao buscar members' });
+  }
+});
+
+
+// =========================
+// 🔥 KICK STATUS
 // =========================
 app.get('/kick-status/:channel', async (req, res) => {
   try {
@@ -58,9 +93,8 @@ app.get('/kick-status/:channel', async (req, res) => {
 
     const data = await r.json();
     const isLive = data.livestream?.is_live === true;
-    const viewers = data.livestream?.viewer_count || 0;
 
-    res.json({ isLive, viewers });
+    res.json({ isLive });
   } catch {
     res.status(502).json({ error: 'Erro ao consultar Kick' });
   }
@@ -68,7 +102,7 @@ app.get('/kick-status/:channel', async (req, res) => {
 
 
 // =========================
-// 🟣 TWITCH STATUS (novo)
+// 🟣 TWITCH STATUS
 // =========================
 app.get('/twitch-status/:channel', async (req, res) => {
   try {
@@ -95,7 +129,6 @@ app.get('/twitch-status/:channel', async (req, res) => {
     );
 
     const data = await r.json();
-
     const isLive = data.data.length > 0;
 
     res.json({ isLive });
@@ -106,9 +139,10 @@ app.get('/twitch-status/:channel', async (req, res) => {
 
 
 // =========================
-// 🔥 HEALTH
+// ❤️ HEALTH
 // =========================
 app.get('/health', (_, res) => res.json({ status: 'ok' }));
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Backend rodando na porta ${PORT}`));
