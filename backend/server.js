@@ -179,6 +179,21 @@ app.get('/kick-status/:channel', async (req, res) => {
   }
 });
 
+// MIGRATE
+app.get('/migrate', async (_, res) => {
+  try {
+    await pool.query(`
+      ALTER TABLE goals
+      ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'free',
+      ADD COLUMN IF NOT EXISTS deadline TEXT DEFAULT '',
+      ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
+    `);
+    res.json({ success: true, message: 'Migração concluída!' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/health', (_, res) => res.json({ status: 'ok' }));
 
 const PORT = process.env.PORT || 3000;
