@@ -71,9 +71,9 @@ async function initDB() {
     );
     CREATE TABLE IF NOT EXISTS goals (
       id TEXT PRIMARY KEY, member_id TEXT NOT NULL, title TEXT NOT NULL,
-      target INTEGER NOT NULL, current INTEGER DEFAULT 0,
-      unit TEXT DEFAULT '', status TEXT DEFAULT 'active',
-      created_at TIMESTAMPTZ DEFAULT NOW()
+      target INTEGER NOT NULL, current INTEGER DEFAULT 0, unit TEXT DEFAULT '',
+      type TEXT DEFAULT 'free', deadline TEXT DEFAULT '',
+      status TEXT DEFAULT 'active', created_at TIMESTAMPTZ DEFAULT NOW()
     );
   `);
   console.log('Banco de dados inicializado!');
@@ -147,9 +147,21 @@ app.delete('/stock/:id', async (req, res) => { await pool.query('DELETE FROM sto
 
 // GOALS
 app.get('/goals', async (_, res) => { const r = await pool.query('SELECT * FROM goals ORDER BY created_at DESC'); res.json(r.rows); });
-app.post('/goals', async (req, res) => { const { member_id, title, target, current = 0, unit = '' } = req.body; if (!member_id || !title || !target) return res.status(400).json({ error: 'member_id, title e target obrigatórios' }); const id = uuid(); await pool.query('INSERT INTO goals (id,member_id,title,target,current,unit) VALUES ($1,$2,$3,$4,$5,$6)', [id, member_id, title, target, current, unit]); const r = await pool.query('SELECT * FROM goals WHERE id=$1', [id]); res.json(r.rows[0]); });
+app.post('/goals', async (req, res) => { const { member_id, title, target, current = 0, unit = '', type = 'free', deadline = '' } = req.body; if (!member_id || !title || !target) return res.status(400).json({ error: 'member_id, title e target obrigatórios' }); const id = uuid(); await pool.query('INSERT INTO goals (id,member_id,title,target,current,unit,type,deadline) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)', [id, member_id, title, target, current, unit, type, deadline]); const r = await pool.query('SELECT * FROM goals WHERE id=$1', [id]); res.json(r.rows[0]); });
 app.patch('/goals/:id', async (req, res) => { const { current, status } = req.body; if (status !== undefined) { await pool.query('UPDATE goals SET status=$1 WHERE id=$2', [status, req.params.id]); } else { await pool.query('UPDATE goals SET current=$1 WHERE id=$2', [current, req.params.id]); } const r = await pool.query('SELECT * FROM goals WHERE id=$1', [req.params.id]); res.json(r.rows[0]); });
 app.delete('/goals/:id', async (req, res) => { await pool.query('DELETE FROM goals WHERE id=$1', [req.params.id]); res.json({ success: true }); });
+
+// RESET GOALS (temporário)
+app.get('/reset-goals', async (_, res) => {
+  await pool.query('DROP TABLE IF EXISTS goals');
+  await pool.query(`CREATE TABLE goals (
+    id TEXT PRIMARY KEY, member_id TEXT NOT NULL, title TEXT NOT NULL,
+    target INTEGER NOT NULL, current INTEGER DEFAULT 0, unit TEXT DEFAULT '',
+    type TEXT DEFAULT 'free', deadline TEXT DEFAULT '',
+    status TEXT DEFAULT 'active', created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  res.json({ success: true });
+});
 
 // KICK STATUS
 app.get('/kick-status/:channel', async (req, res) => {
@@ -165,17 +177,6 @@ app.get('/kick-status/:channel', async (req, res) => {
   } catch {
     res.status(502).json({ error: 'Erro ao consultar Kick' });
   }
-});
-
-app.get('/reset-goals', async (_, res) => {
-  await pool.query('DROP TABLE IF EXISTS goals');
-  await pool.query(`CREATE TABLE goals (
-    id TEXT PRIMARY KEY, member_id TEXT NOT NULL, title TEXT NOT NULL,
-    target INTEGER NOT NULL, current INTEGER DEFAULT 0,
-    unit TEXT DEFAULT '', status TEXT DEFAULT 'active',
-    created_at TIMESTAMPTZ DEFAULT NOW()
-  )`);
-  res.json({ success: true });
 });
 
 app.get('/health', (_, res) => res.json({ status: 'ok' }));
