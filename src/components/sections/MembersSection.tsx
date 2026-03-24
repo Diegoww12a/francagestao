@@ -1,66 +1,72 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Plus, Trash2, Edit2, Save, Users, Wifi, WifiOff, RefreshCw, X, Calendar, Shield } from 'lucide-react';
 import { api } from '../../lib/api';
 
-interface Member { id: string; name: string; role: string; kick_channel: string; avatar_url: string; joined_at: string; status: 'active' | 'inactive'; created_at: string; }
+interface Member { id: string; name: string; role: string; kick_channel: string; twitch_channel: string; joined_at: string; status: 'active' | 'inactive'; created_at: string; }
 interface LiveStatus { isLive: boolean; loading: boolean; }
 
 const ROLES = ['Líder', 'Co-Líder', 'Capitão', 'Soldado', 'Recruta'];
+const BASE = import.meta.env.VITE_API_URL || 'https://francagestao-ttfr.onrender.com';
 type FilterType = 'all' | 'online' | 'offline';
 
-function MemberModal({ member, liveStatus, onClose }: { member: Member; liveStatus?: LiveStatus; onClose: () => void; }) {
-  const isLive = liveStatus?.isLive;
+function MemberModal({ member, kickStatus, twitchStatus, onClose }: {
+  member: Member; kickStatus?: LiveStatus; twitchStatus?: LiveStatus; onClose: () => void;
+}) {
   const joinedDate = member.joined_at ? new Date(member.joined_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }) : '—';
   const createdDate = new Date(member.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
-
   const diasNaFaccao = () => {
     const base = member.joined_at || member.created_at;
-    const diff = Date.now() - new Date(base).getTime();
-    return Math.floor(diff / (1000 * 60 * 60 * 24));
+    return Math.floor((Date.now() - new Date(base).getTime()) / (1000 * 60 * 60 * 24));
   };
 
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
-        {/* Header */}
         <div className="relative">
           <div className="h-24 bg-gradient-to-r from-blue-600 to-purple-600 rounded-t-2xl"></div>
           <button onClick={onClose} className="absolute top-3 right-3 text-white/70 hover:text-white"><X size={20} /></button>
           <div className="absolute -bottom-10 left-6">
-           <div className="w-20 h-20 rounded-full border-4 border-gray-900 bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white text-2xl font-bold">{member.name.charAt(0).toUpperCase()}</div>
+            <div className="w-20 h-20 rounded-full border-4 border-gray-900 bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white text-2xl font-bold">{member.name.charAt(0).toUpperCase()}</div>
           </div>
-          {member.kick_channel && (
-            <div className={`absolute -bottom-4 right-6 flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${isLive ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-400'}`}>
-              {isLive ? <><Wifi size={10} /> Online</> : <><WifiOff size={10} /> Offline</>}
-            </div>
-          )}
+          <div className="absolute -bottom-4 right-6 flex items-center gap-2">
+            {member.kick_channel && (
+              <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${kickStatus?.isLive ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-400'}`}>
+                {kickStatus?.isLive ? <><Wifi size={10} /> Kick</> : <><WifiOff size={10} /> Kick</>}
+              </div>
+            )}
+            {member.twitch_channel && (
+              <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${twitchStatus?.isLive ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-400'}`}>
+                {twitchStatus?.isLive ? <><Wifi size={10} /> Twitch</> : <><WifiOff size={10} /> Twitch</>}
+              </div>
+            )}
+          </div>
         </div>
-
-        {/* Info */}
         <div className="pt-14 px-6 pb-6">
           <h2 className="text-2xl font-bold text-white">{member.name}</h2>
           <p className="text-gray-400 text-sm mt-1">{member.role}</p>
-
-          <div className="mt-6 space-y-4">
+          <div className="mt-6 space-y-3">
             <div className="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3">
               <div className="flex items-center gap-2 text-gray-400 text-sm"><Shield size={16} /> Situação</div>
               <span className={`px-3 py-1 rounded-full text-xs font-semibold ${member.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}`}>{member.status === 'active' ? 'Ativo' : 'Inativo'}</span>
             </div>
-
             <div className="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3">
               <div className="flex items-center gap-2 text-gray-400 text-sm"><Calendar size={16} /> Entrou em</div>
               <span className="text-white text-sm">{joinedDate !== '—' ? joinedDate : createdDate}</span>
             </div>
-
             <div className="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3">
               <div className="flex items-center gap-2 text-gray-400 text-sm">⏱️ Tempo na facção</div>
               <span className="text-white text-sm font-semibold">{diasNaFaccao()} dias</span>
             </div>
-
             {member.kick_channel && (
               <div className="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3">
-                <div className="flex items-center gap-2 text-gray-400 text-sm">🎮 Canal Kick</div>
-                <a href={`https://kick.com/${member.kick_channel}`} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 text-sm">kick.com/{member.kick_channel}</a>
+                <div className="flex items-center gap-2 text-gray-400 text-sm">🎮 Kick</div>
+                <a href={`https://kick.com/${member.kick_channel}`} target="_blank" rel="noopener noreferrer" className="text-green-400 hover:text-green-300 text-sm">kick.com/{member.kick_channel}</a>
+              </div>
+            )}
+            {member.twitch_channel && (
+              <div className="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3">
+                <div className="flex items-center gap-2 text-gray-400 text-sm">🟣 Twitch</div>
+                <a href={`https://twitch.tv/${member.twitch_channel}`} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 text-sm">twitch.tv/{member.twitch_channel}</a>
               </div>
             )}
           </div>
@@ -72,11 +78,12 @@ function MemberModal({ member, liveStatus, onClose }: { member: Member; liveStat
 
 export default function MembersSection() {
   const [members, setMembers] = useState<Member[]>([]);
-  const [liveStatuses, setLiveStatuses] = useState<Record<string, LiveStatus>>({});
-  const [newMember, setNewMember] = useState({ name: '', role: 'Recruta', kick_channel: '', joined_at: '', status: 'active' as const });
+  const [kickStatuses, setKickStatuses] = useState<Record<string, LiveStatus>>({});
+  const [twitchStatuses, setTwitchStatuses] = useState<Record<string, LiveStatus>>({});
+  const [newMember, setNewMember] = useState({ name: '', role: 'Recruta', kick_channel: '', twitch_channel: '', joined_at: '', status: 'active' as const });
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editData, setEditData] = useState({ name: '', role: '', kick_channel: '', joined_at: '', status: 'active' as const });
+  const [editData, setEditData] = useState({ name: '', role: '', kick_channel: '', twitch_channel: '', joined_at: '', status: 'active' as const });
   const [filter, setFilter] = useState<FilterType>('all');
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
 
@@ -85,32 +92,49 @@ export default function MembersSection() {
   const fetchMembers = async () => {
     const data = await api.getMembers();
     setMembers(data);
-    fetchAllLiveStatuses(data);
+    fetchAllStatuses(data);
   };
 
-  const fetchAllLiveStatuses = async (memberList: Member[]) => {
+  const fetchAllStatuses = async (memberList: Member[]) => {
+    // Kick
     const withKick = memberList.filter(m => m.kick_channel?.trim());
-    const initial: Record<string, LiveStatus> = {};
-    withKick.forEach(m => { initial[m.id] = { isLive: false, loading: true }; });
-    setLiveStatuses(initial);
-
+    const kickInit: Record<string, LiveStatus> = {};
+    withKick.forEach(m => { kickInit[m.id] = { isLive: false, loading: true }; });
+    setKickStatuses(kickInit);
     await Promise.all(withKick.map(async (m) => {
       try {
         const channel = m.kick_channel.trim().replace('https://kick.com/', '').replace('kick.com/', '');
         const res = await fetch(`https://kick.com/api/v2/channels/${channel}`);
         const data = await res.json();
-        const isLive = data.livestream?.is_live === true;
-        setLiveStatuses(prev => ({ ...prev, [m.id]: { isLive, loading: false } }));
+        setKickStatuses(prev => ({ ...prev, [m.id]: { isLive: data.livestream?.is_live === true, loading: false } }));
       } catch {
-        setLiveStatuses(prev => ({ ...prev, [m.id]: { isLive: false, loading: false } }));
+        setKickStatuses(prev => ({ ...prev, [m.id]: { isLive: false, loading: false } }));
+      }
+    }));
+
+    // Twitch
+    const withTwitch = memberList.filter(m => m.twitch_channel?.trim());
+    const twitchInit: Record<string, LiveStatus> = {};
+    withTwitch.forEach(m => { twitchInit[m.id] = { isLive: false, loading: true }; });
+    setTwitchStatuses(twitchInit);
+    await Promise.all(withTwitch.map(async (m) => {
+      try {
+        const channel = m.twitch_channel.trim().replace('https://twitch.tv/', '').replace('twitch.tv/', '');
+        const res = await fetch(`${BASE}/twitch-status/${channel}`);
+        const data = await res.json();
+        setTwitchStatuses(prev => ({ ...prev, [m.id]: { isLive: data.isLive, loading: false } }));
+      } catch {
+        setTwitchStatuses(prev => ({ ...prev, [m.id]: { isLive: false, loading: false } }));
       }
     }));
   };
 
+  const isOnline = (m: Member) => kickStatuses[m.id]?.isLive || twitchStatuses[m.id]?.isLive;
+
   const addMember = async () => {
     if (!newMember.name.trim()) return;
     await api.addMember(newMember);
-    setNewMember({ name: '', role: 'Recruta', kick_channel: '', joined_at: '', status: 'active' });
+    setNewMember({ name: '', role: 'Recruta', kick_channel: '', twitch_channel: '', joined_at: '', status: 'active' });
     setIsAdding(false);
     fetchMembers();
   };
@@ -122,32 +146,51 @@ export default function MembersSection() {
   };
 
   const deleteMember = async (id: string) => { await api.deleteMember(id); fetchMembers(); };
-  const startEdit = (m: Member) => { setEditingId(m.id); setEditData({ name: m.name, role: m.role, kick_channel: m.kick_channel || '', avatar_url: m.avatar_url || '', joined_at: m.joined_at || '', status: m.status }); };
+  const startEdit = (m: Member) => { setEditingId(m.id); setEditData({ name: m.name, role: m.role, kick_channel: m.kick_channel || '', twitch_channel: m.twitch_channel || '', joined_at: m.joined_at || '', status: m.status }); };
 
   const active = members.filter(m => m.status === 'active');
-  const liveCount = Object.values(liveStatuses).filter(s => s.isLive).length;
+  const kickLive = Object.values(kickStatuses).filter(s => s.isLive).length;
+  const twitchLive = Object.values(twitchStatuses).filter(s => s.isLive).length;
+  const liveCount = members.filter(m => isOnline(m)).length;
 
   const sortedMembers = [...members].sort((a, b) => {
-    const aLive = liveStatuses[a.id]?.isLive ? 1 : 0;
-    const bLive = liveStatuses[b.id]?.isLive ? 1 : 0;
+    const aLive = isOnline(a) ? 1 : 0;
+    const bLive = isOnline(b) ? 1 : 0;
     return bLive - aLive;
   });
 
   const filteredMembers = sortedMembers.filter(m => {
-    if (filter === 'all') return true;
-    if (filter === 'online') return liveStatuses[m.id]?.isLive === true;
-    if (filter === 'offline') return !liveStatuses[m.id]?.isLive;
+    if (filter === 'online') return isOnline(m);
+    if (filter === 'offline') return !isOnline(m);
     return true;
   });
 
+  const renderStatus = (m: Member) => {
+    const kick = kickStatuses[m.id];
+    const twitch = twitchStatuses[m.id];
+    const loading = kick?.loading || twitch?.loading;
+    if (loading) return <span className="flex items-center gap-1 text-gray-500 text-xs"><div className="w-2 h-2 rounded-full bg-gray-500 animate-pulse"></div> ...</span>;
+    if (kick?.isLive) return <span className="flex items-center gap-1 text-green-400 text-xs font-semibold"><Wifi size={12} /> Kick Live</span>;
+    if (twitch?.isLive) return <span className="flex items-center gap-1 text-purple-400 text-xs font-semibold"><Wifi size={12} /> Twitch Live</span>;
+    if (m.kick_channel || m.twitch_channel) return <span className="flex items-center gap-1 text-gray-500 text-xs"><WifiOff size={12} /> Offline</span>;
+    return <span className="text-gray-600 text-xs">—</span>;
+  };
+
   return (
     <div className="space-y-6">
-      {selectedMember && <MemberModal member={selectedMember} liveStatus={liveStatuses[selectedMember.id]} onClose={() => setSelectedMember(null)} />}
+      {selectedMember && (
+        <MemberModal
+          member={selectedMember}
+          kickStatus={kickStatuses[selectedMember.id]}
+          twitchStatus={twitchStatuses[selectedMember.id]}
+          onClose={() => setSelectedMember(null)}
+        />
+      )}
 
       <div className="flex items-center justify-between">
         <div><h2 className="text-3xl font-bold text-white">Membros</h2><p className="text-gray-400 mt-1">Gerencie os membros da facção</p></div>
         <div className="flex gap-3">
-          <button onClick={() => fetchAllLiveStatuses(members)} title="Atualizar" className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg transition-colors"><RefreshCw size={16} /></button>
+          <button onClick={() => fetchAllStatuses(members)} className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg transition-colors"><RefreshCw size={16} /></button>
           <button onClick={() => setIsAdding(!isAdding)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"><Plus size={20} /> Novo Membro</button>
         </div>
       </div>
@@ -175,12 +218,16 @@ export default function MembersSection() {
               {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
             <div>
-             <label className="text-xs text-gray-400 mb-1 block">Canal do Kick</label>
-             <input type="text" placeholder="ex: KroozzNS" value={newMember.kick_channel} onChange={(e) => setNewMember({ ...newMember, kick_channel: e.target.value })} className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500" />
+              <label className="text-xs text-gray-400 mb-1 block">Canal do Kick</label>
+              <input type="text" placeholder="ex: ovotz" value={newMember.kick_channel} onChange={(e) => setNewMember({ ...newMember, kick_channel: e.target.value })} className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">Canal da Twitch</label>
+              <input type="text" placeholder="ex: neymarjr" value={newMember.twitch_channel} onChange={(e) => setNewMember({ ...newMember, twitch_channel: e.target.value })} className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500" />
             </div>
             <div>
               <label className="text-xs text-gray-400 mb-1 block">Data de entrada</label>
-              <input type="date" value={newMember.joined_at} onChange={(e) => setNewMember({ ...newMember, joined_at: e.target.value })} className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500 [color-scheme:dark]" />            
+              <input type="date" value={newMember.joined_at} onChange={(e) => setNewMember({ ...newMember, joined_at: e.target.value })} className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500 [color-scheme:dark]" />
             </div>
             <div className="flex gap-3 items-end">
               <button onClick={addMember} className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors">Adicionar</button>
@@ -190,51 +237,51 @@ export default function MembersSection() {
         </div>
       )}
 
-        <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
+      <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
         <table className="w-full">
           <thead className="bg-gray-900">
             <tr>
               <th className="px-6 py-3 text-left text-xs text-gray-400 uppercase">Status</th>
               <th className="px-6 py-3 text-left text-xs text-gray-400 uppercase">Nome</th>
               <th className="px-6 py-3 text-left text-xs text-gray-400 uppercase">Cargo</th>
-              <th className="px-6 py-3 text-left text-xs text-gray-400 uppercase">Canal Kick</th>
+              <th className="px-6 py-3 text-left text-xs text-gray-400 uppercase">Kick / Twitch</th>
               <th className="px-6 py-3 text-left text-xs text-gray-400 uppercase">Situação</th>
               <th className="px-6 py-3 text-right text-xs text-gray-400 uppercase">Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-700">
-            {filteredMembers.map(m => {
-              const live = liveStatuses[m.id];
-              const hasKick = m.kick_channel?.trim();
-              return (
-               <tr key={m.id} onClick={() => editingId !== m.id && setSelectedMember(m)} className={`cursor-pointer hover:bg-gray-700/50 transition-colors ${live?.isLive ? 'bg-green-500/5' : ''}`}>
-                  <td className="px-6 py-4">
-                    {!hasKick
-                      ? <span className="text-gray-600 text-xs">—</span>
-                      : live?.loading
-                        ? <span className="flex items-center gap-1 text-gray-500 text-xs"><div className="w-2 h-2 rounded-full bg-gray-500 animate-pulse"></div> ...</span>
-                        : live?.isLive
-                          ? <span className="flex items-center gap-1 text-green-400 text-xs font-semibold"><Wifi size={12} /> Online</span>
-                          : <span className="flex items-center gap-1 text-gray-500 text-xs"><WifiOff size={12} /> Offline</span>
-                    }
-                  </td>
-                  <td className="px-6 py-4">
-                    {editingId === m.id
-                      ? <input value={editData.name} onChange={(e) => setEditData({ ...editData, name: e.target.value })} className="bg-gray-900 border border-gray-700 rounded px-3 py-1 text-white w-full" />
-                      : <button onClick={() => setSelectedMember(m)} className="text-white font-medium hover:text-blue-400 transition-colors text-left">{m.name}</button>
-                    }
-                  </td>
-                  <td className="px-6 py-4">{editingId === m.id ? <select value={editData.role} onChange={(e) => setEditData({ ...editData, role: e.target.value })} className="bg-gray-900 border border-gray-700 rounded px-3 py-1 text-white">{ROLES.map(r => <option key={r} value={r}>{r}</option>)}</select> : <span className="text-gray-300">{m.role}</span>}</td>
-                  <td className="px-6 py-4">{editingId === m.id ? <input value={editData.kick_channel} onChange={(e) => setEditData({ ...editData, kick_channel: e.target.value })} placeholder="canal" className="bg-gray-900 border border-gray-700 rounded px-3 py-1 text-white w-full" /> : <span className="text-gray-400 text-sm">{m.kick_channel || '—'}</span>}</td>
-                  <td className="px-6 py-4">{editingId === m.id ? <select value={editData.status} onChange={(e) => setEditData({ ...editData, status: e.target.value as any })} className="bg-gray-900 border border-gray-700 rounded px-3 py-1 text-white"><option value="active">Ativo</option><option value="inactive">Inativo</option></select> : <span className={`px-3 py-1 rounded-full text-xs font-semibold ${m.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}`}>{m.status === 'active' ? 'Ativo' : 'Inativo'}</span>}</td>
-                  <td className="px-6 py-4 text-right"><div className="flex items-center justify-end gap-2">{editingId === m.id ? <button onClick={() => updateMember(m.id)} className="text-green-400 hover:text-green-300"><Save size={18} /></button> : <button onClick={() => startEdit(m)} className="text-gray-400 hover:text-blue-400"><Edit2 size={18} /></button>}<button onClick={() => deleteMember(m.id)} className="text-gray-400 hover:text-red-400"><Trash2 size={18} /></button></div></td>
-                </tr>
-              );
-            })}
+            {filteredMembers.map(m => (
+              <tr key={m.id} onClick={() => editingId !== m.id && setSelectedMember(m)} className={`cursor-pointer hover:bg-gray-700/50 transition-colors ${isOnline(m) ? 'bg-green-500/5' : ''}`}>
+                <td className="px-6 py-4">{renderStatus(m)}</td>
+                <td className="px-6 py-4">{editingId === m.id ? <input value={editData.name} onChange={(e) => setEditData({ ...editData, name: e.target.value })} className="bg-gray-900 border border-gray-700 rounded px-3 py-1 text-white w-full" onClick={e => e.stopPropagation()} /> : <span className="text-white font-medium">{m.name}</span>}</td>
+                <td className="px-6 py-4">{editingId === m.id ? <select value={editData.role} onChange={(e) => setEditData({ ...editData, role: e.target.value })} className="bg-gray-900 border border-gray-700 rounded px-3 py-1 text-white" onClick={e => e.stopPropagation()}>{ROLES.map(r => <option key={r} value={r}>{r}</option>)}</select> : <span className="text-gray-300">{m.role}</span>}</td>
+                <td className="px-6 py-4">
+                  {editingId === m.id ? (
+                    <div className="flex gap-2" onClick={e => e.stopPropagation()}>
+                      <input value={editData.kick_channel} onChange={(e) => setEditData({ ...editData, kick_channel: e.target.value })} placeholder="kick" className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-white text-sm w-24" />
+                      <input value={editData.twitch_channel} onChange={(e) => setEditData({ ...editData, twitch_channel: e.target.value })} placeholder="twitch" className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-white text-sm w-24" />
+                    </div>
+                  ) : (
+                    <div className="flex gap-2 text-xs text-gray-400">
+                      {m.kick_channel && <span className="text-green-400">K: {m.kick_channel}</span>}
+                      {m.twitch_channel && <span className="text-purple-400">T: {m.twitch_channel}</span>}
+                      {!m.kick_channel && !m.twitch_channel && '—'}
+                    </div>
+                  )}
+                </td>
+                <td className="px-6 py-4">{editingId === m.id ? <select value={editData.status} onChange={(e) => setEditData({ ...editData, status: e.target.value as any })} className="bg-gray-900 border border-gray-700 rounded px-3 py-1 text-white" onClick={e => e.stopPropagation()}><option value="active">Ativo</option><option value="inactive">Inativo</option></select> : <span className={`px-3 py-1 rounded-full text-xs font-semibold ${m.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}`}>{m.status === 'active' ? 'Ativo' : 'Inativo'}</span>}</td>
+                <td className="px-6 py-4 text-right" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-end gap-2">
+                    {editingId === m.id ? <button onClick={() => updateMember(m.id)} className="text-green-400 hover:text-green-300"><Save size={18} /></button> : <button onClick={() => startEdit(m)} className="text-gray-400 hover:text-blue-400"><Edit2 size={18} /></button>}
+                    <button onClick={() => deleteMember(m.id)} className="text-gray-400 hover:text-red-400"><Trash2 size={18} /></button>
+                  </div>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
         {filteredMembers.length === 0 && <div className="text-center py-12"><p className="text-gray-500">Nenhum membro encontrado</p></div>}
       </div>
     </div>
   );
-}
+}''

@@ -11,6 +11,7 @@ import DeliveriesSection from './components/sections/DeliveriesSection';
 import HistorySection from './components/sections/HistorySection';
 import MembersSection from './components/sections/MembersSection';
 import FinanceSection from './components/sections/FinanceSection';
+import GoalsSection from './components/sections/GoalsSection';
 import AdvancedHistoryPage from './components/pages/AdvancedHistoryPage';
 
 function App() {
@@ -23,10 +24,7 @@ function App() {
     if (auth === 'true') setIsAuthenticated(true);
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem('faction_auth');
-    setIsAuthenticated(false);
-  };
+  const handleLogout = () => { localStorage.removeItem('faction_auth'); setIsAuthenticated(false); };
 
   const renderSection = () => {
     switch (activeSection) {
@@ -38,6 +36,7 @@ function App() {
       case 'deliveries': return <DeliveriesSection />;
       case 'members': return <MembersSection />;
       case 'finance': return <FinanceSection />;
+      case 'goals': return <GoalsSection />;
       case 'history': return <HistorySection />;
       case 'advanced-history': return <AdvancedHistoryPage />;
       default: return <TasksSection />;
