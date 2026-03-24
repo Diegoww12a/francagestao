@@ -1,4 +1,4 @@
-import { CheckSquare, Target, StickyNote, ShoppingCart, TrendingUp, Package, History, Users, Wallet, Archive } from 'lucide-react';
+import { CheckSquare, Target, StickyNote, ShoppingCart, TrendingUp, Package, History, Users, Wallet, Trophy } from 'lucide-react';
 
 interface SidebarProps { activeSection: string; onSectionChange: (section: string) => void; }
 
@@ -11,6 +11,7 @@ const menuItems = [
   { id: 'deliveries', label: 'Entregas', icon: Package, color: 'from-cyan-600 to-cyan-700' },
   { id: 'members', label: 'Membros', icon: Users, color: 'from-pink-600 to-pink-700' },
   { id: 'finance', label: 'Finanças', icon: Wallet, color: 'from-emerald-600 to-emerald-700' },
+  { id: 'goals', label: 'Metas', icon: Trophy, color: 'from-amber-600 to-amber-700' },
   { id: 'history', label: 'Histórico', icon: History, color: 'from-rose-600 to-rose-700' },
   { id: 'advanced-history', label: 'Relatório', icon: History, color: 'from-indigo-600 to-indigo-700' },
 ];

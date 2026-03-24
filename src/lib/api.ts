@@ -1,4 +1,4 @@
-const BASE = import.meta.env.VITE_API_URL || 'https://francagestao.onrender.com';
+const BASE = import.meta.env.VITE_API_URL || 'https://francagestao-ttfr.onrender.com';
 
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
@@ -45,14 +45,22 @@ export const api = {
   updateDelivery: (id: string, data: object) => req<any>('PATCH', `/deliveries/${id}`, data),
   deleteDelivery: (id: string) => req<any>('DELETE', `/deliveries/${id}`),
 
-  // Membros
   getMembers: () => req<any[]>('GET', '/members'),
   addMember: (data: object) => req<any>('POST', '/members', data),
   updateMember: (id: string, data: object) => req<any>('PATCH', `/members/${id}`, data),
   deleteMember: (id: string) => req<any>('DELETE', `/members/${id}`),
 
-  // Finanças
   getTransactions: () => req<any[]>('GET', '/transactions'),
   addTransaction: (data: object) => req<any>('POST', '/transactions', data),
   deleteTransaction: (id: string) => req<any>('DELETE', `/transactions/${id}`),
+
+  getStock: () => req<any[]>('GET', '/stock'),
+  addStock: (data: object) => req<any>('POST', '/stock', data),
+  updateStock: (id: string, data: object) => req<any>('PATCH', `/stock/${id}`, data),
+  deleteStock: (id: string) => req<any>('DELETE', `/stock/${id}`),
+
+  getGoals: () => req<any[]>('GET', '/goals'),
+  addGoal: (data: object) => req<any>('POST', '/goals', data),
+  updateGoal: (id: string, data: object) => req<any>('PATCH', `/goals/${id}`, data),
+  deleteGoal: (id: string) => req<any>('DELETE', `/goals/${id}`),
 };
