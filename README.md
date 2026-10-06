@@ -9,8 +9,8 @@ Painel administrativo **full-stack**: autenticação por senha, dashboard com gr
 Sistema de gestão com separação clara entre frontend e backend.
 
 - **Frontend** — React + TypeScript, gráficos via Recharts, ícones Lucide
-- **Backend** — API Node com banco SQLite local (`better-sqlite3`)
-- **Deploy** — frontend no GitHub Pages, backend no Render
+- **Backend** — API Node/Express com **PostgreSQL** (`pg`) e 10 tabelas criadas por script
+- **Deploy** — frontend no Netlify, backend no Render (via `DATABASE_URL`)
 
 ## Segurança
 
@@ -18,7 +18,7 @@ Decisões tomadas de propósito:
 
 - A senha **nunca aparece no frontend** — só o hash trafega
 - O hash (bcrypt, `PASSWORD_HASH`) vive **apenas** na variável de ambiente do servidor
-- Os dados ficam num arquivo `data.db` (SQLite), fora do repositório
+- Os dados ficam no banco **PostgreSQL** hospedado fora do repositório, acessado por `DATABASE_URL`
 
 Para gerar um hash novo:
 
@@ -70,7 +70,7 @@ npm start
 
 ## Stack
 
-React · TypeScript · Vite · Tailwind CSS · Recharts · Node · SQLite · bcrypt · ESLint
+React · TypeScript · Vite · Tailwind CSS · Recharts · Node · Express · PostgreSQL · bcrypt · ESLint
 
 ## Autor
 
