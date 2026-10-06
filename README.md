@@ -74,4 +74,4 @@ React · TypeScript · Vite · Tailwind CSS · Recharts · Node · SQLite · bcr
 
 ## Autor
 
-**Diego Neves** — Desenvolvedor Front-end
+**Diego Neves** — Desenvolvedor Full Stack
