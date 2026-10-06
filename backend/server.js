@@ -3,12 +3,21 @@ import cors from 'cors';
 import bcrypt from 'bcrypt';
 import pg from 'pg';
 import { randomUUID } from 'crypto';
+import 'dotenv/config';
 
 const app = express();
 const { Pool } = pg;
 
+// Falha cedo se faltar configuração — nunca usar valor padrão para segredos.
+const obrigatorio = ['DATABASE_URL', 'PASSWORD_HASH'];
+const faltando = obrigatorio.filter((k) => !process.env[k]);
+if (faltando.length) {
+  console.error(`Variáveis de ambiente ausentes: ${faltando.join(', ')}`);
+  process.exit(1);
+}
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://REDACTED_DB_USER:REDACTED_DB_PASSWORD@REDACTED_DB_HOST-a/francagestao_db',
+  connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
@@ -83,9 +92,25 @@ async function initDB() {
 
 initDB().catch(console.error);
 
-const PASSWORD_HASH = process.env.PASSWORD_HASH || 'REDACTED_PASSWORD_HASH';
+const PASSWORD_HASH = process.env.PASSWORD_HASH;
+const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID;
+const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
 const uuid = () => randomUUID();
 const now = () => new Date().toISOString();
+
+// Exige a mesma senha do /login — para rotas administrativas.
+async function requireAdmin(req, res, next) {
+  const auth = req.headers.authorization || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
+  if (!token) return res.status(401).json({ error: 'Token obrigatório' });
+  try {
+    const ok = await bcrypt.compare(token, PASSWORD_HASH);
+    if (!ok) return res.status(401).json({ error: 'Não autorizado' });
+    next();
+  } catch {
+    res.status(401).json({ error: 'Não autorizado' });
+  }
+}
 
 // AUTH
 app.post('/login', async (req, res) => {
@@ -159,9 +184,8 @@ let twitchToken = null;
 let twitchTokenExpiry = 0;
 async function getTwitchToken() {
   if (twitchToken && Date.now() < twitchTokenExpiry) return twitchToken;
-  const clientId = process.env.TWITCH_CLIENT_ID || 'REDACTED_TWITCH_CLIENT_ID';
-  const clientSecret = process.env.TWITCH_CLIENT_SECRET || 'REDACTED_TWITCH_SECRET';
-  const r = await fetch(`https://id.twitch.tv/oauth2/token?client_id=${clientId}&client_secret=${clientSecret}&grant_type=client_credentials`, { method: 'POST' });
+  if (!TWITCH_CLIENT_ID || !TWITCH_CLIENT_SECRET) return null;
+  const r = await fetch(`https://id.twitch.tv/oauth2/token?client_id=${TWITCH_CLIENT_ID}&client_secret=${TWITCH_CLIENT_SECRET}&grant_type=client_credentials`, { method: 'POST' });
   const data = await r.json();
   twitchToken = data.access_token;
   twitchTokenExpiry = Date.now() + (data.expires_in - 60) * 1000;
@@ -171,10 +195,10 @@ async function getTwitchToken() {
 // TWITCH STATUS
 app.get('/twitch-status/:channel', async (req, res) => {
   try {
-    const clientId = process.env.TWITCH_CLIENT_ID || 'REDACTED_TWITCH_CLIENT_ID';
     const token = await getTwitchToken();
+    if (!token) return res.status(503).json({ error: 'Integração Twitch não configurada' });
     const r = await fetch(`https://api.twitch.tv/helix/streams?user_login=${req.params.channel}`, {
-      headers: { 'Client-ID': clientId, 'Authorization': `Bearer ${token}` }
+      headers: { 'Client-ID': TWITCH_CLIENT_ID, 'Authorization': `Bearer ${token}` }
     });
     if (!r.ok) return res.status(502).json({ error: 'Erro ao consultar Twitch' });
     const data = await r.json();
@@ -200,7 +224,7 @@ app.get('/kick-status/:channel', async (req, res) => {
 });
 
 // RESET GOALS
-app.get('/reset-goals', async (_, res) => {
+app.get('/reset-goals', requireAdmin, async (_, res) => {
   await pool.query('DROP TABLE IF EXISTS goals');
   await pool.query(`CREATE TABLE goals (
     id TEXT PRIMARY KEY, member_id TEXT NOT NULL, title TEXT NOT NULL,

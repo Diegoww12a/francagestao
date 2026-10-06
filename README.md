@@ -19,15 +19,16 @@ Decisões tomadas de propósito:
 - A senha **nunca aparece no frontend** — só o hash trafega
 - O hash (bcrypt, `PASSWORD_HASH`) vive **apenas** na variável de ambiente do servidor
 - Os dados ficam no banco **PostgreSQL** hospedado fora do repositório, acessado por `DATABASE_URL`
+- Nenhum segredo tem valor padrão no código: faltando env, o processo aborta no boot
+- Rotas administrativas (`/reset-goals`) exigem `Authorization: Bearer <senha>`
+- CORS libera apenas os domínios publicados + `localhost` em desenvolvimento
 
 Para gerar um hash novo:
 
 ```bash
 cd backend
 node hash.js sua_nova_senha
-```
-
-## Configuração
+```## Configuração
 
 ### Frontend
 
@@ -39,11 +40,23 @@ VITE_API_URL=https://SEU-BACKEND.onrender.com
 
 ### Backend
 
-Adicione no painel do Render/Railway:
+Copie o modelo e preencha:
+
+```bash
+cd backend
+cp .env.example .env
+```
+
+O servidor **recusa subir** se `DATABASE_URL` ou `PASSWORD_HASH` faltarem — nenhum segredo tem valor padrão no código.
 
 ```
+DATABASE_URL=postgresql://...
 PASSWORD_HASH=$2b$10$...
+TWITCH_CLIENT_ID=
+TWITCH_CLIENT_SECRET=
 ```
+
+No Render/Railway, defina as mesmas variáveis no painel do serviço.
 
 ## Rodar localmente
 
